@@ -14,6 +14,7 @@ import {
   Package,
   Globe,
   Mail,
+  Phone,
   ChefHat,
   Shield,
   TrendingUp,
@@ -983,6 +984,17 @@ export default function Index() {
                 <li className="flex items-start gap-3">
                   <Mail className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
                   <span>contato@cardapon.com.br</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <Phone className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                  <a 
+                    href="https://wa.me/5518996192561?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20o%20CardpOn."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-green-400 transition-colors"
+                  >
+                    WhatsApp Suporte
+                  </a>
                 </li>
               </ul>
             </div>

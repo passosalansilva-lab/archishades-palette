@@ -365,6 +365,7 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
               type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               className="pl-10 pr-10"
+              autoComplete="current-password"
               {...loginForm.register('password')}
             />
             <button
@@ -720,6 +721,7 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
             type={showPassword ? 'text' : 'password'}
             placeholder="••••••••"
             className="pl-10 pr-10"
+            autoComplete="new-password"
             {...step2Form.register('password')}
           />
           <button
@@ -744,6 +746,7 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
             type={showPassword ? 'text' : 'password'}
             placeholder="••••••••"
             className="pl-10"
+            autoComplete="new-password"
             {...step2Form.register('confirmPassword')}
           />
         </div>
