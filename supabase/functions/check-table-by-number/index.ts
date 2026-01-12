@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { tableNumber, companySlug } = await req.json()
+    const { tableNumber, companySlug, customerName, customerEmail, customerPhone, customerCount } = await req.json()
     
     console.log(`Checking table ${tableNumber} for company ${companySlug}`)
 
@@ -26,6 +26,9 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+    
+    // If customer data is provided, we need to create/update the session with this info
+    const hasCustomerData = customerName && customerPhone
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -89,14 +92,30 @@ Deno.serve(async (req) => {
       )
     }
 
-    // If no session exists, create one automatically (self-service mode)
+    // If no session exists, we need customer data to create one
     if (!session || !session.session_token) {
-      console.log('No active session for table', tableNumber, '- creating new session automatically')
+      // If no customer data provided, tell frontend to collect it
+      if (!hasCustomerData) {
+        console.log('No active session and no customer data - requesting customer info')
+        return new Response(
+          JSON.stringify({ 
+            hasActiveSession: false,
+            needsCustomerData: true,
+            tableId: table.id,
+            tableNumber: table.table_number,
+            tableName: table.name || `Mesa ${table.table_number}`,
+            message: 'Por favor, informe seus dados para abrir a mesa.'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      console.log('Creating new session with customer data:', customerName, customerPhone)
       
       // Generate a unique session token
       const sessionToken = crypto.randomUUID()
       
-      // Create new session
+      // Create new session with customer data
       const { data: newSession, error: createError } = await supabase
         .from('table_sessions')
         .insert({
@@ -104,9 +123,13 @@ Deno.serve(async (req) => {
           company_id: table.company_id,
           session_token: sessionToken,
           status: 'open',
-          opened_at: new Date().toISOString()
+          opened_at: new Date().toISOString(),
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          customer_email: customerEmail || null,
+          customer_count: customerCount || 1
         })
-        .select('id, session_token, opened_at')
+        .select('id, session_token, opened_at, customer_name')
         .single()
       
       if (createError) {
@@ -126,8 +149,9 @@ Deno.serve(async (req) => {
           tableId: table.id,
           tableNumber: table.table_number,
           tableName: table.name || `Mesa ${table.table_number}`,
+          customerName: newSession.customer_name,
           openedAt: newSession.opened_at,
-          newSession: true // Flag to indicate this was just created
+          newSession: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )

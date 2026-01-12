@@ -44,7 +44,7 @@ import { InstallAppPrompt } from '@/components/InstallAppPrompt';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
 import { HalfHalfPizzaModal } from '@/components/menu/HalfHalfPizzaModal';
 import { WaiterCallButton } from '@/components/tables/WaiterCallButton';
-import { CustomerCountModal } from '@/components/tables/CustomerCountModal';
+import { TableCustomerModal } from '@/components/tables/TableCustomerModal';
 import { MyTicketsModal } from '@/components/menu/MyTicketsModal';
 import { usePizzaConfig } from '@/hooks/usePizzaConfig';
 import { useSmartSuggestions } from '@/hooks/useSmartSuggestions';
@@ -225,8 +225,9 @@ function PublicMenuContent() {
   const [tableSessionValid, setTableSessionValid] = useState<boolean | null>(null);
   const [tableSessionError, setTableSessionError] = useState<string | null>(null);
   const [checkingTableSession, setCheckingTableSession] = useState(false);
-  const [showCustomerCountModal, setShowCustomerCountModal] = useState(false);
-  const [pendingSessionToken, setPendingSessionToken] = useState<string | null>(null);
+  const [showTableCustomerModal, setShowTableCustomerModal] = useState(false);
+  const [pendingTableNumber, setPendingTableNumber] = useState<number | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
   
   // Sync session token when URL changes
   // Initialize session token and table number from URL (only once)
@@ -314,6 +315,16 @@ function PublicMenuContent() {
           }
           
           const data = response.data;
+          
+          // If needs customer data, show the customer modal
+          if (data.needsCustomerData) {
+            console.log('No active session - showing customer data modal');
+            setPendingTableNumber(data.tableNumber);
+            setShowTableCustomerModal(true);
+            setCheckingTableSession(false);
+            return;
+          }
+          
           if (data.hasActiveSession && data.sessionToken) {
             // Redirect to token-based URL
             const newUrl = new URL(window.location.href);
@@ -327,17 +338,9 @@ function PublicMenuContent() {
             setSessionToken(data.sessionToken);
             setTableNumber(data.tableNumber);
             setTableId(data.tableId);
-            setTableSessionId(data.sessionId); // Set the session ID for order linking
+            setTableSessionId(data.sessionId);
             setTableSessionError(null);
-            
-            // If this is a newly created session, show customer count modal
-            if (data.newSession) {
-              setPendingSessionToken(data.sessionToken);
-              setShowCustomerCountModal(true);
-              // Don't set tableSessionValid yet - wait for customer count
-            } else {
-              setTableSessionValid(true);
-            }
+            setTableSessionValid(true);
           } else {
             // No active session - show message
             setTableSessionValid(false);
@@ -361,34 +364,66 @@ function PublicMenuContent() {
     checkTableSession();
   }, [sessionToken, tableNumber, slug]);
   
-  // Handle customer count confirmation for new table sessions
-  const handleCustomerCountConfirm = async (count: number) => {
-    if (!pendingSessionToken) return;
+  // Handle customer data confirmation for new table sessions
+  const handleTableCustomerConfirm = async (data: {
+    name: string;
+    email: string;
+    phone: string;
+    customerCount: number;
+  }) => {
+    if (!pendingTableNumber || !slug) return;
+    
+    setIsCreatingSession(true);
     
     try {
-      const response = await supabase.functions.invoke('update-session-customer-count', {
-        body: { sessionToken: pendingSessionToken, customerCount: count }
+      const response = await supabase.functions.invoke('check-table-by-number', {
+        body: { 
+          tableNumber: pendingTableNumber, 
+          companySlug: slug,
+          customerName: data.name,
+          customerEmail: data.email,
+          customerPhone: data.phone,
+          customerCount: data.customerCount
+        }
       });
       
-      // Update sessionId and tableId from response if available
-      if (response.data?.sessionId) {
-        setTableSessionId(response.data.sessionId);
-      }
-      if (response.data?.tableId) {
-        setTableId(response.data.tableId);
+      if (response.error) {
+        console.error('Error creating session:', response.error);
+        toast.error('Erro ao abrir mesa. Tente novamente.');
+        setIsCreatingSession(false);
+        return;
       }
       
-      setTableSessionValid(true);
-      setShowCustomerCountModal(false);
-      setPendingSessionToken(null);
-      toast.success(`Mesa aberta com ${count} ${count === 1 ? 'pessoa' : 'pessoas'}!`);
+      const responseData = response.data;
+      
+      if (responseData.hasActiveSession && responseData.sessionToken) {
+        // Redirect to token-based URL
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('mesa');
+        newUrl.searchParams.set('sessao', responseData.sessionToken);
+        window.history.replaceState({}, '', newUrl.toString());
+        
+        // Update ref to prevent re-check
+        tableSessionCheckRef.current = `${responseData.sessionToken}-${responseData.tableNumber}-${slug}`;
+        
+        setSessionToken(responseData.sessionToken);
+        setTableNumber(responseData.tableNumber);
+        setTableId(responseData.tableId);
+        setTableSessionId(responseData.sessionId);
+        setTableSessionError(null);
+        setTableSessionValid(true);
+        setShowTableCustomerModal(false);
+        setPendingTableNumber(null);
+        
+        toast.success(`Olá ${data.name}! Mesa ${responseData.tableNumber} aberta com sucesso!`);
+      } else {
+        toast.error('Erro ao abrir mesa. Tente novamente.');
+      }
     } catch (error) {
-      console.error('Error updating customer count:', error);
-      // Still allow access even if count update fails - but try to get session info
-      // The user should reload the page to get proper session data
-      setTableSessionValid(true);
-      setShowCustomerCountModal(false);
-      setPendingSessionToken(null);
+      console.error('Error creating session with customer data:', error);
+      toast.error('Erro ao abrir mesa. Tente novamente.');
+    } finally {
+      setIsCreatingSession(false);
     }
   };
   
@@ -1913,12 +1948,13 @@ function PublicMenuContent() {
         />
       )}
 
-      {/* Customer Count Modal for new table sessions */}
-      {tableNumber && (
-        <CustomerCountModal
-          open={showCustomerCountModal}
-          onConfirm={handleCustomerCountConfirm}
-          tableNumber={tableNumber}
+      {/* Table Customer Modal for new table sessions */}
+      {(pendingTableNumber || tableNumber) && (
+        <TableCustomerModal
+          open={showTableCustomerModal}
+          onConfirm={handleTableCustomerConfirm}
+          tableNumber={pendingTableNumber || tableNumber || 0}
+          isLoading={isCreatingSession}
         />
       )}
 
