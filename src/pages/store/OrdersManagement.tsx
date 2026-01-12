@@ -138,6 +138,7 @@ interface Order {
   change_for?: number | null;
   cancellation_reason?: string | null;
   source?: string;
+  table_session_id?: string | null;
   order_items?: OrderItem[];
   customer_addresses?: DeliveryAddress;
   delivery_driver?: DeliveryDriver;
@@ -976,6 +977,38 @@ export default function OrdersManagement() {
           .eq('id', order.id);
 
         if (error) throw error;
+
+        // If this was a table order, check if we need to close the table session
+        if (order.table_session_id) {
+          // Check if there are any other non-cancelled orders for this session
+          const { data: otherOrders, error: checkError } = await supabase
+            .from('orders')
+            .select('id')
+            .eq('table_session_id', order.table_session_id)
+            .neq('id', order.id)
+            .neq('status', 'cancelled')
+            .limit(1);
+
+          if (!checkError && (!otherOrders || otherOrders.length === 0)) {
+            // No other active orders, close the table session
+            const { error: closeError } = await supabase
+              .from('table_sessions')
+              .update({ 
+                status: 'closed', 
+                closed_at: new Date().toISOString() 
+              })
+              .eq('id', order.table_session_id);
+
+            if (closeError) {
+              console.error('Error closing table session:', closeError);
+            } else {
+              toast({
+                title: 'Mesa liberada',
+                description: 'A sessão da mesa foi encerrada automaticamente.',
+              });
+            }
+          }
+        }
 
         // Update local state
         setOrders((prev) =>

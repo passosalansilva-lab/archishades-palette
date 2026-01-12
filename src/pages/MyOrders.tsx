@@ -92,6 +92,7 @@ interface Order {
   payment_method: string;
   created_at: string;
   cancellation_reason?: string | null;
+  table_session_id?: string | null;
   order_items: OrderItem[];
   customer_addresses: {
     street: string;
@@ -379,6 +380,29 @@ export default function MyOrders() {
         .eq("id", order.id);
 
       if (error) throw error;
+
+      // If this was a table order, check if we need to close the table session
+      if (order.table_session_id) {
+        // Check if there are any other non-cancelled orders for this session
+        const { data: otherOrders, error: checkError } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("table_session_id", order.table_session_id)
+          .neq("id", order.id)
+          .neq("status", "cancelled")
+          .limit(1);
+
+        if (!checkError && (!otherOrders || otherOrders.length === 0)) {
+          // No other active orders, close the table session
+          await supabase
+            .from("table_sessions")
+            .update({ 
+              status: "closed", 
+              closed_at: new Date().toISOString() 
+            })
+            .eq("id", order.table_session_id);
+        }
+      }
 
       // Update local state
       setOrders((prev) =>
