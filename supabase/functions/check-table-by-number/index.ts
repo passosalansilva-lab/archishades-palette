@@ -121,7 +121,9 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           hasActiveSession: true,
+          sessionId: newSession.id,
           sessionToken: newSession.session_token,
+          tableId: table.id,
           tableNumber: table.table_number,
           tableName: table.name || `Mesa ${table.table_number}`,
           openedAt: newSession.opened_at,
@@ -135,7 +137,9 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         hasActiveSession: true,
+        sessionId: session.id,
         sessionToken: session.session_token,
+        tableId: table.id,
         tableNumber: table.table_number,
         tableName: table.name || `Mesa ${table.table_number}`,
         openedAt: session.opened_at

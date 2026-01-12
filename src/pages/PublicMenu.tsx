@@ -326,6 +326,8 @@ function PublicMenuContent() {
             
             setSessionToken(data.sessionToken);
             setTableNumber(data.tableNumber);
+            setTableId(data.tableId);
+            setTableSessionId(data.sessionId); // Set the session ID for order linking
             setTableSessionError(null);
             
             // If this is a newly created session, show customer count modal
@@ -364,9 +366,17 @@ function PublicMenuContent() {
     if (!pendingSessionToken) return;
     
     try {
-      await supabase.functions.invoke('update-session-customer-count', {
+      const response = await supabase.functions.invoke('update-session-customer-count', {
         body: { sessionToken: pendingSessionToken, customerCount: count }
       });
+      
+      // Update sessionId and tableId from response if available
+      if (response.data?.sessionId) {
+        setTableSessionId(response.data.sessionId);
+      }
+      if (response.data?.tableId) {
+        setTableId(response.data.tableId);
+      }
       
       setTableSessionValid(true);
       setShowCustomerCountModal(false);
@@ -374,7 +384,8 @@ function PublicMenuContent() {
       toast.success(`Mesa aberta com ${count} ${count === 1 ? 'pessoa' : 'pessoas'}!`);
     } catch (error) {
       console.error('Error updating customer count:', error);
-      // Still allow access even if count update fails
+      // Still allow access even if count update fails - but try to get session info
+      // The user should reload the page to get proper session data
       setTableSessionValid(true);
       setShowCustomerCountModal(false);
       setPendingSessionToken(null);

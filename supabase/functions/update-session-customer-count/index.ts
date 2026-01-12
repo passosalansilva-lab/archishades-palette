@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       .update({ customer_count: customerCount })
       .eq('session_token', sessionToken)
       .eq('status', 'open')
-      .select('id, customer_count')
+      .select('id, table_id, customer_count')
       .single()
 
     if (error) {
@@ -53,7 +53,12 @@ Deno.serve(async (req) => {
 
     console.log('Session updated successfully:', data)
     return new Response(
-      JSON.stringify({ success: true, customerCount: data.customer_count }),
+      JSON.stringify({ 
+        success: true, 
+        sessionId: data.id,
+        tableId: data.table_id,
+        customerCount: data.customer_count 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
