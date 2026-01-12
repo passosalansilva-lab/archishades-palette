@@ -17,6 +17,8 @@ import {
   UtensilsCrossed,
   ChefHat,
   Sparkles,
+  Split,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   Sheet,
@@ -50,6 +52,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SplitBillModal, SplitResult } from './SplitBillModal';
 
 interface TableSession {
   id: string;
@@ -161,6 +164,13 @@ export function TableSessionModal({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('cash');
   const [closingSession, setClosingSession] = useState(false);
 
+  // Split bill
+  const [splitBillOpen, setSplitBillOpen] = useState(false);
+  const [splits, setSplits] = useState<SplitResult[]>([]);
+  const [currentSplitIndex, setCurrentSplitIndex] = useState<number | null>(null);
+  const [paidSplits, setPaidSplits] = useState<Set<number>>(new Set());
+  const [splitPaymentDialogOpen, setSplitPaymentDialogOpen] = useState(false);
+
   const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -239,6 +249,10 @@ export function TableSessionModal({
       loadProducts();
       setCart([]);
       setActiveTab('items');
+      // Reset split bill state
+      setSplits([]);
+      setCurrentSplitIndex(null);
+      setPaidSplits(new Set());
     }
   }, [open, session, loadSessionData, loadProducts]);
 
@@ -395,54 +409,109 @@ export function TableSessionModal({
     setPaymentDialogOpen(true);
   };
 
+  const handleOpenSplitBill = () => {
+    if (allItems.length === 0) {
+      toast({ title: 'Nenhum item na mesa', variant: 'destructive' });
+      return;
+    }
+    setSplitBillOpen(true);
+  };
+
+  const handleSplitConfirm = (newSplits: SplitResult[]) => {
+    setSplits(newSplits);
+    setPaidSplits(new Set());
+    setCurrentSplitIndex(null);
+    toast({ title: 'Conta dividida!', description: `Dividida entre ${newSplits.length} pessoas` });
+  };
+
+  const handlePaySplit = (index: number) => {
+    setCurrentSplitIndex(index);
+    setSelectedPaymentMethod('cash');
+    setSplitPaymentDialogOpen(true);
+  };
+
+  const handleConfirmSplitPayment = async () => {
+    if (currentSplitIndex === null) return;
+    
+    setClosingSession(true);
+    try {
+      // Mark this split as paid
+      const newPaidSplits = new Set(paidSplits);
+      newPaidSplits.add(currentSplitIndex);
+      setPaidSplits(newPaidSplits);
+      
+      toast({ 
+        title: `Pessoa ${currentSplitIndex + 1} pagou!`, 
+        description: formatCurrency(splits[currentSplitIndex].amount) 
+      });
+      
+      setSplitPaymentDialogOpen(false);
+      setCurrentSplitIndex(null);
+      
+      // Check if all splits are paid
+      if (newPaidSplits.size === splits.length) {
+        // All paid - close session
+        await handleCloseSessionFinal();
+      }
+    } catch (error: any) {
+      toast({ title: 'Erro ao processar pagamento', description: error.message, variant: 'destructive' });
+    } finally {
+      setClosingSession(false);
+    }
+  };
+
+  const handleCloseSessionFinal = async () => {
+    if (!session || !companyId) return;
+    
+    const orderIds = orders.map((o) => o.id);
+    
+    for (const orderId of orderIds) {
+      await supabase
+        .from('orders')
+        .update({
+          payment_method: splits.length > 0 ? 'split' as any : selectedPaymentMethod as any,
+          payment_status: 'paid' as any,
+          status: 'delivered' as any,
+        })
+        .eq('id', orderId);
+    }
+
+    await supabase
+      .from('table_sessions')
+      .update({ 
+        status: 'closed', 
+        closed_at: new Date().toISOString(),
+        customer_name: null,
+        customer_phone: null,
+        customer_count: null,
+      })
+      .eq('id', session.id);
+
+    await supabase
+      .from('waiter_calls')
+      .update({ status: 'cancelled', completed_at: new Date().toISOString() })
+      .eq('table_id', session.table_id)
+      .in('status', ['pending', 'acknowledged']);
+
+    await supabase
+      .from('tables')
+      .update({ status: 'available' })
+      .eq('id', session.table_id);
+
+    toast({ title: 'Conta fechada com sucesso!' });
+    setSplits([]);
+    setPaidSplits(new Set());
+    onOpenChange(false);
+    onUpdate();
+  };
+
   const handleCloseSession = async () => {
     if (!session || !companyId) return;
 
     setClosingSession(true);
     try {
-      // Update all orders in this session with the payment method and status
-      const orderIds = orders.map((o) => o.id);
-      
-      for (const orderId of orderIds) {
-        await supabase
-          .from('orders')
-          .update({
-            payment_method: selectedPaymentMethod as any,
-            payment_status: 'paid' as any,
-            status: 'delivered' as any,
-          })
-          .eq('id', orderId);
-      }
-
-      // Close the session and clear customer data
-      await supabase
-        .from('table_sessions')
-        .update({ 
-          status: 'closed', 
-          closed_at: new Date().toISOString(),
-          customer_name: null,
-          customer_phone: null,
-          customer_count: null,
-        })
-        .eq('id', session.id);
-
-      // Cancel all pending waiter calls for this table
-      await supabase
-        .from('waiter_calls')
-        .update({ status: 'cancelled', completed_at: new Date().toISOString() })
-        .eq('table_id', session.table_id)
-        .in('status', ['pending', 'acknowledged']);
-
-      // Free the table
-      await supabase
-        .from('tables')
-        .update({ status: 'available' })
-        .eq('id', session.table_id);
-
-      toast({ title: 'Conta fechada com sucesso!' });
+      await handleCloseSessionFinal();
       setPaymentDialogOpen(false);
-      onOpenChange(false);
-      onUpdate();
     } catch (error: any) {
       console.error('Error closing session:', error);
       toast({ title: 'Erro ao fechar conta', description: error.message, variant: 'destructive' });
@@ -450,6 +519,16 @@ export function TableSessionModal({
       setClosingSession(false);
     }
   };
+
+  const handleClearSplits = () => {
+    setSplits([]);
+    setPaidSplits(new Set());
+    setCurrentSplitIndex(null);
+  };
+
+  const remainingToPay = splits.length > 0 
+    ? splits.reduce((sum, split, i) => paidSplits.has(i) ? sum : sum + split.amount, 0)
+    : totalSession;
 
   // Parse options to display
   const formatItemOptions = (options: any): string => {
@@ -643,19 +722,141 @@ export function TableSessionModal({
                         <span className="font-medium">{session.customer_count || 1}</span>
                       </div>
                       <Separator />
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-semibold">Total da Mesa</span>
-                        <span className="text-2xl font-black text-primary">{formatCurrency(totalSession)}</span>
-                      </div>
-                      <Button 
-                        className="w-full h-12 text-base font-semibold gap-2 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/25" 
-                        size="lg" 
-                        onClick={handleOpenPaymentDialog}
-                        disabled={allItems.length === 0}
-                      >
-                        <DollarSign className="h-5 w-5" />
-                        Fechar Conta
-                      </Button>
+                      
+                      {/* Split Bill Section */}
+                      {splits.length > 0 ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Split className="h-4 w-4 text-primary" />
+                              <span className="font-semibold">Conta Dividida</span>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={handleClearSplits}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <ArrowLeft className="h-4 w-4 mr-1" />
+                              Voltar
+                            </Button>
+                          </div>
+                          
+                          <div className="grid gap-2">
+                            {splits.map((split, index) => {
+                              const isPaid = paidSplits.has(index);
+                              return (
+                                <motion.div
+                                  key={index}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: index * 0.05 }}
+                                >
+                                  <Card className={cn(
+                                    "p-3 transition-all",
+                                    isPaid 
+                                      ? "bg-emerald-500/10 border-emerald-500/30" 
+                                      : "hover:shadow-md cursor-pointer hover:border-primary/30"
+                                  )}>
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className={cn(
+                                          "w-10 h-10 rounded-full flex items-center justify-center font-bold",
+                                          isPaid 
+                                            ? "bg-emerald-500 text-white" 
+                                            : "bg-primary/10 text-primary"
+                                        )}>
+                                          {isPaid ? <Check className="h-5 w-5" /> : index + 1}
+                                        </div>
+                                        <div>
+                                          <div className="font-medium">{split.label}</div>
+                                          {split.items && split.items.length > 0 && (
+                                            <div className="text-xs text-muted-foreground">
+                                              {split.items.length} itens
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <div className={cn(
+                                          "text-lg font-bold",
+                                          isPaid ? "text-emerald-600" : "text-primary"
+                                        )}>
+                                          {formatCurrency(split.amount)}
+                                        </div>
+                                        {isPaid ? (
+                                          <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-700">
+                                            Pago
+                                          </Badge>
+                                        ) : (
+                                          <Button 
+                                            size="sm"
+                                            onClick={() => handlePaySplit(index)}
+                                            className="gap-1"
+                                          >
+                                            <DollarSign className="h-4 w-4" />
+                                            Pagar
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </Card>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                          
+                          {/* Remaining Summary */}
+                          <div className="flex items-center justify-between pt-2">
+                            <span className="text-muted-foreground">Falta pagar:</span>
+                            <span className={cn(
+                              "text-xl font-bold",
+                              remainingToPay === 0 ? "text-emerald-600" : "text-primary"
+                            )}>
+                              {formatCurrency(remainingToPay)}
+                            </span>
+                          </div>
+                          
+                          {paidSplits.size === splits.length && splits.length > 0 && (
+                            <Button 
+                              className="w-full h-12 text-base font-semibold gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700" 
+                              size="lg"
+                              onClick={handleCloseSessionFinal}
+                            >
+                              <Check className="h-5 w-5" />
+                              Finalizar Mesa
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-lg font-semibold">Total da Mesa</span>
+                            <span className="text-2xl font-black text-primary">{formatCurrency(totalSession)}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button 
+                              variant="outline"
+                              className="h-12 text-base font-semibold gap-2" 
+                              size="lg" 
+                              onClick={handleOpenSplitBill}
+                              disabled={allItems.length === 0}
+                            >
+                              <Split className="h-5 w-5" />
+                              Dividir
+                            </Button>
+                            <Button 
+                              className="h-12 text-base font-semibold gap-2 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/25" 
+                              size="lg" 
+                              onClick={handleOpenPaymentDialog}
+                              disabled={allItems.length === 0}
+                            >
+                              <DollarSign className="h-5 w-5" />
+                              Fechar
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </>
@@ -914,6 +1115,121 @@ export function TableSessionModal({
             </AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleCloseSession}
+              disabled={closingSession}
+              className="flex-1 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary gap-2"
+            >
+              {closingSession ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Split Bill Modal */}
+      <SplitBillModal
+        open={splitBillOpen}
+        onOpenChange={setSplitBillOpen}
+        total={totalSession}
+        items={allItems.map(item => ({
+          id: item.id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+        }))}
+        onConfirm={handleSplitConfirm}
+      />
+
+      {/* Split Payment Dialog */}
+      <AlertDialog open={splitPaymentDialogOpen} onOpenChange={setSplitPaymentDialogOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                <Users className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-xl">
+                  Pagar - Pessoa {currentSplitIndex !== null ? currentSplitIndex + 1 : ''}
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-base">
+                  Mesa {table?.table_number}
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="py-4 space-y-4">
+            {/* Amount Display */}
+            <div className="text-center py-4 px-6 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+              <p className="text-sm text-muted-foreground mb-1">Valor</p>
+              <p className="text-4xl font-black text-primary">
+                {currentSplitIndex !== null && splits[currentSplitIndex] 
+                  ? formatCurrency(splits[currentSplitIndex].amount) 
+                  : '-'}
+              </p>
+            </div>
+
+            {/* Payment Methods */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Forma de Pagamento</Label>
+              <RadioGroup
+                value={selectedPaymentMethod}
+                onValueChange={setSelectedPaymentMethod}
+                className="grid grid-cols-2 gap-3"
+              >
+                {PAYMENT_METHODS.map((method) => {
+                  const Icon = method.icon;
+                  const isSelected = selectedPaymentMethod === method.id;
+                  return (
+                    <div key={method.id}>
+                      <RadioGroupItem
+                        value={method.id}
+                        id={`split-${method.id}`}
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor={`split-${method.id}`}
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-2 rounded-xl border-2 p-4 cursor-pointer transition-all",
+                          "hover:bg-muted/50",
+                          isSelected 
+                            ? "border-primary bg-primary/5 shadow-md" 
+                            : "border-muted bg-background"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                          isSelected 
+                            ? `bg-gradient-to-br ${method.color} text-white` 
+                            : "bg-muted text-muted-foreground"
+                        )}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <span className={cn(
+                          "text-sm font-medium",
+                          isSelected && "text-primary"
+                        )}>
+                          {method.label}
+                        </span>
+                      </Label>
+                    </div>
+                  );
+                })}
+              </RadioGroup>
+            </div>
+          </div>
+
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel disabled={closingSession} className="flex-1">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmSplitPayment}
               disabled={closingSession}
               className="flex-1 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary gap-2"
             >
