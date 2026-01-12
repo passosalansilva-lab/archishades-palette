@@ -36,6 +36,7 @@ import {
   UserCog,
   ChefHat,
   Gift,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -86,6 +87,7 @@ const superAdminNavItems: NavItem[] = [
   { label: "Funcionalidades", href: "/dashboard/admin/features", icon: Package, roles: ["super_admin"] },
   { label: "Nota Fiscal (NFe)", href: "/dashboard/admin/nfe", icon: FileText, roles: ["super_admin"] },
   { label: "Logs do Sistema", href: "/dashboard/admin/logs", icon: ScrollText, roles: ["super_admin"] },
+  { label: "Saúde das Integrações", href: "/dashboard/admin/integrations", icon: Activity, roles: ["super_admin"] },
   { label: "Config. Onboarding", href: "/dashboard/admin/onboarding", icon: BookOpen, roles: ["super_admin"] },
   { label: "Indicações (Admin)", href: "/dashboard/admin/referrals", icon: Crown, roles: ["super_admin"] },
   { label: "Config. Sistema", href: "/dashboard/admin/system", icon: Settings, roles: ["super_admin"] },

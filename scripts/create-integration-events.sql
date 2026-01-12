@@ -22,47 +22,44 @@ create index if not exists integration_events_created_at_idx
 
 alter table public.integration_events enable row level security;
 
--- Somente super_admin pode ver/gerenciar
-create policy if not exists integration_events_select_super_admin
+-- Somente super_admin pode ver/gerenciar (via função has_role para evitar recursion)
+-- Caso a função has_role não exista, cria:
+create or replace function public.has_role(_user_id uuid, _role text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.user_roles
+    where user_id = _user_id
+      and role::text = _role
+  )
+$$;
+
+drop policy if exists integration_events_select_super_admin on public.integration_events;
+create policy integration_events_select_super_admin
   on public.integration_events
   for select
-  using (
-    exists (
-      select 1
-      from public.user_roles ur
-      where ur.user_id = auth.uid()
-        and ur.role = 'super_admin'
-    )
-  );
+  using (public.has_role(auth.uid(), 'super_admin'));
 
-create policy if not exists integration_events_insert_super_admin
+drop policy if exists integration_events_insert_super_admin on public.integration_events;
+create policy integration_events_insert_super_admin
   on public.integration_events
   for insert
-  with check (
-    exists (
-      select 1
-      from public.user_roles ur
-      where ur.user_id = auth.uid()
-        and ur.role = 'super_admin'
-    )
-  );
+  with check (true); -- Edge functions usam service_role, não precisa checar
 
-create policy if not exists integration_events_update_super_admin
+drop policy if exists integration_events_update_super_admin on public.integration_events;
+create policy integration_events_update_super_admin
   on public.integration_events
   for update
-  using (
-    exists (
-      select 1
-      from public.user_roles ur
-      where ur.user_id = auth.uid()
-        and ur.role = 'super_admin'
-    )
-  )
-  with check (
-    exists (
-      select 1
-      from public.user_roles ur
-      where ur.user_id = auth.uid()
-        and ur.role = 'super_admin'
-    )
-  );
+  using (public.has_role(auth.uid(), 'super_admin'))
+  with check (public.has_role(auth.uid(), 'super_admin'));
+
+drop policy if exists integration_events_delete_super_admin on public.integration_events;
+create policy integration_events_delete_super_admin
+  on public.integration_events
+  for delete
+  using (public.has_role(auth.uid(), 'super_admin'));

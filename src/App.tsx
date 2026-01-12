@@ -14,6 +14,7 @@ import PublicMenu from "./pages/PublicMenu";
 import AdminCompanies from "./pages/admin/AdminCompanies";
 import AdminPlans from "./pages/admin/AdminPlans";
 import AdminLogs from "./pages/admin/AdminLogs";
+import IntegrationHealth from "./pages/admin/IntegrationHealth";
 import OnboardingConfig from "./pages/admin/OnboardingConfig";
 import AdminReferrals from "./pages/admin/AdminReferrals";
 import NfeSettings from "./pages/admin/NfeSettings";
@@ -375,6 +376,14 @@ const App = () => (
                 element={
                   <ProtectedRoute requiredRoles={["super_admin"]}>
                     <SystemSettings />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/admin/integrations"
+                element={
+                  <ProtectedRoute requiredRoles={["super_admin"]}>
+                    <IntegrationHealth />
                   </ProtectedRoute>
                 }
               />
