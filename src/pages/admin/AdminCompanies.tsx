@@ -186,12 +186,37 @@ export default function AdminCompanies() {
     
     setSavingBonus(true);
     try {
+      // Get current company data to find previous bonus and owner
+      const company = companies.find(c => c.id === bonusEditing.companyId);
+      const previousBonus = (company as any)?.revenue_limit_bonus || 0;
+      
       const { error } = await supabase
         .from('companies')
         .update({ revenue_limit_bonus: bonusEditing.value } as any)
         .eq('id', bonusEditing.companyId);
 
       if (error) throw error;
+
+      // Send email notification if bonus changed
+      if (company && bonusEditing.value !== previousBonus && bonusEditing.value > 0) {
+        const planLimit = getPlanLimit(company.subscription_plan);
+        const newTotalLimit = planLimit + bonusEditing.value;
+        
+        try {
+          await supabase.functions.invoke('send-bonus-email', {
+            body: {
+              companyId: bonusEditing.companyId,
+              ownerId: company.owner_id,
+              bonusAmount: bonusEditing.value,
+              previousBonus: previousBonus,
+              newTotalLimit: newTotalLimit,
+            },
+          });
+        } catch (emailError) {
+          console.error('Error sending bonus email:', emailError);
+          // Don't fail the whole operation if email fails
+        }
+      }
 
       toast({
         title: 'Bônus atualizado',

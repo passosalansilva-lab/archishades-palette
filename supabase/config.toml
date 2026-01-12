@@ -221,3 +221,6 @@ verify_jwt = false
 
 [functions.check-subscription-expirations]
 verify_jwt = false
+
+[functions.send-bonus-email]
+verify_jwt = false
