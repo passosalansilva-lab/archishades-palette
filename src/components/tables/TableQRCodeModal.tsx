@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Download, Loader2, Printer } from 'lucide-react';
+import { Download, Loader2, Printer, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -36,6 +36,7 @@ export function TableQRCodeModal({
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
   const [qrCodes, setQrCodes] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
 
   // Generate QR codes when modal opens
@@ -69,6 +70,21 @@ export function TableQRCodeModal({
 
     generateQRCodes();
   }, [open, tables, companySlug]);
+
+  const getTableUrl = (tableNumber: number) => {
+    return `${window.location.origin}/menu/${companySlug}?mesa=${tableNumber}`;
+  };
+
+  const handleCopyLink = async (tableId: string, tableNumber: number) => {
+    try {
+      await navigator.clipboard.writeText(getTableUrl(tableNumber));
+      setCopiedId(tableId);
+      toast({ title: 'Link copiado!' });
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      toast({ title: 'Erro ao copiar', variant: 'destructive' });
+    }
+  };
 
   const downloadPDF = async () => {
     if (tables.length === 0) return;
@@ -217,6 +233,24 @@ export function TableQRCodeModal({
                   {table.name && (
                     <p className="text-sm text-muted-foreground text-center">{table.name}</p>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => handleCopyLink(table.id, table.table_number)}
+                  >
+                    {copiedId === table.id ? (
+                      <>
+                        <Check className="h-3 w-3 mr-1" />
+                        Copiado
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copiar Link
+                      </>
+                    )}
+                  </Button>
                 </div>
               ))}
             </div>
