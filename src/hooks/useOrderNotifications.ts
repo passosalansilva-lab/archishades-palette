@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,6 +11,10 @@ interface OrderPayload {
   status: string;
   created_at: string;
 }
+
+// Track notified orders to prevent duplicates (shared across all instances)
+const notifiedOrders = new Set<string>();
+const NOTIFICATION_COOLDOWN = 5000; // 5 seconds cooldown per order
 
 // ====== Push Notification Functions ======
 
@@ -279,16 +283,59 @@ export function useOrderNotifications() {
             filter: `company_id=eq.${company.id}`,
           },
           async (payload) => {
-            console.log('New order received:', payload);
             const newOrder = payload.new as OrderPayload;
+            
+            // Validate order data exists
+            if (!newOrder?.id || !newOrder?.customer_name || newOrder.total === undefined) {
+              console.warn('[useOrderNotifications] Invalid order payload, skipping notification:', payload);
+              return;
+            }
+
+            // Check if we already notified for this order (prevent duplicates)
+            const notificationKey = `insert-${newOrder.id}`;
+            if (notifiedOrders.has(notificationKey)) {
+              console.log('[useOrderNotifications] Duplicate notification blocked for:', newOrder.id);
+              return;
+            }
+
+            // Add to notified set and remove after cooldown
+            notifiedOrders.add(notificationKey);
+            setTimeout(() => notifiedOrders.delete(notificationKey), NOTIFICATION_COOLDOWN);
+
+            // Verify order actually exists in database with items (prevent phantom notifications)
+            // Small delay to ensure order_items are inserted
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const { data: orderWithItems, error: verifyError } = await supabase
+              .from('orders')
+              .select('id, order_items(id)')
+              .eq('id', newOrder.id)
+              .maybeSingle();
+
+            if (verifyError || !orderWithItems) {
+              console.warn('[useOrderNotifications] Phantom order detected (not found), skipping:', newOrder.id);
+              notifiedOrders.delete(notificationKey);
+              return;
+            }
+
+            // Check if order has items (empty orders are phantom/incomplete)
+            const hasItems = orderWithItems.order_items && orderWithItems.order_items.length > 0;
+            if (!hasItems) {
+              console.warn('[useOrderNotifications] Order without items detected, skipping:', newOrder.id);
+              notifiedOrders.delete(notificationKey);
+              return;
+            }
+
+            console.log('[useOrderNotifications] New order verified:', newOrder.id);
             
             // Play notification sound
             if (audioRef.current) {
+              audioRef.current.currentTime = 0;
               audioRef.current.play().catch(console.error);
             }
 
             toast.success(`Novo pedido de ${newOrder.customer_name}!`, {
-              description: `Valor: R$ ${newOrder.total.toFixed(2)}`,
+              description: `Valor: R$ ${Number(newOrder.total).toFixed(2)}`,
               duration: 10000,
               action: {
                 label: 'Ver pedidos',
@@ -303,7 +350,7 @@ export function useOrderNotifications() {
               company.id,
               newOrder.id,
               newOrder.customer_name,
-              newOrder.total
+              Number(newOrder.total)
             );
           }
         )
