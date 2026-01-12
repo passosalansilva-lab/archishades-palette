@@ -28,12 +28,12 @@ export function InstallAppPrompt({
   scope 
 }: InstallAppPromptProps = {}) {
   // Use dynamic manifest based on current route
+  // (start_url já é preenchido pelo hook via react-router)
   useDynamicManifest({
     name,
     short_name,
     description,
     scope,
-    start_url: window.location.pathname + window.location.search,
   });
   const [showButton, setShowButton] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);

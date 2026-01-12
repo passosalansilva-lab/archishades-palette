@@ -11,7 +11,7 @@ interface ManifestConfig {
   background_color?: string;
 }
 
-export function useDynamicManifest(config?: ManifestConfig) {
+export function useDynamicManifest(config?: Partial<ManifestConfig>) {
   const location = useLocation();
 
   const manifestData = useMemo(() => {
@@ -27,7 +27,7 @@ export function useDynamicManifest(config?: ManifestConfig) {
     };
 
     // Merge with custom config
-    const finalConfig = { ...defaultConfig, ...config };
+    const finalConfig = { ...defaultConfig, ...(config ?? {}) };
 
     // Build complete manifest
     return {
@@ -59,7 +59,17 @@ export function useDynamicManifest(config?: ManifestConfig) {
         },
       ],
     };
-  }, [location.pathname, location.search, config]);
+  }, [
+    location.pathname,
+    location.search,
+    config?.name,
+    config?.short_name,
+    config?.description,
+    config?.start_url,
+    config?.scope,
+    config?.theme_color,
+    config?.background_color,
+  ]);
 
   useEffect(() => {
     // Create blob URL for manifest
@@ -68,20 +78,17 @@ export function useDynamicManifest(config?: ManifestConfig) {
     });
     const manifestURL = URL.createObjectURL(manifestBlob);
 
-    // Remove existing manifest link if any
-    const existingManifest = document.querySelector('link[rel="manifest"]');
-    if (existingManifest) {
-      existingManifest.remove();
+    // Update existing manifest link (avoid removing/recreating on every render)
+    let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!manifestLink) {
+      manifestLink = document.createElement('link');
+      manifestLink.rel = 'manifest';
+      document.head.appendChild(manifestLink);
     }
-
-    // Add new manifest link
-    const manifestLink = document.createElement('link');
-    manifestLink.rel = 'manifest';
     manifestLink.href = manifestURL;
-    document.head.appendChild(manifestLink);
 
     // Update theme color
-    let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    let themeColorMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (!themeColorMeta) {
       themeColorMeta = document.createElement('meta');
       themeColorMeta.setAttribute('name', 'theme-color');
