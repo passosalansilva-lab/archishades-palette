@@ -44,6 +44,7 @@ import { CardPaymentScreen } from './CardPaymentScreen';
 import { ReferralShareCard } from './ReferralShareCard';
 import { LotteryTicketsCard } from './LotteryTicketsCard';
 import { useAuth } from '@/hooks/useAuth';
+import { GroupedOptionsDisplay } from '@/components/ui/grouped-options-display';
 
 interface ViaCepResponse {
   cep: string;
@@ -2342,9 +2343,11 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
                   <span>
                     {item.quantity}x {item.productName}
                     {item.options.length > 0 && (
-                      <span className="text-muted-foreground text-xs block">
-                        + {item.options.map(o => o.name).join(', ')}
-                      </span>
+                      <GroupedOptionsDisplay 
+                        options={item.options} 
+                        variant="compact"
+                        className="block"
+                      />
                     )}
                   </span>
                   <span>

@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { GroupedOptionsDisplay } from '@/components/ui/grouped-options-display';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { POSProductModal, SelectedOption } from '@/components/pos/POSProductModal';
@@ -970,9 +971,11 @@ export function TableSessionModal({
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-medium truncate">{item.product.name}</div>
                                   {item.options.length > 0 && (
-                                    <p className="text-xs text-primary mt-0.5">
-                                      {item.options.map(o => o.name).join(', ')}
-                                    </p>
+                                    <GroupedOptionsDisplay 
+                                      options={item.options} 
+                                      variant="compact"
+                                      className="mt-0.5 text-primary"
+                                    />
                                   )}
                                 </div>
                                 <Button

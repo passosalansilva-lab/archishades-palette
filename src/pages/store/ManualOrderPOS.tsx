@@ -34,6 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { GroupedOptionsDisplay } from '@/components/ui/grouped-options-display';
 import { Database } from '@/integrations/supabase/types';
 import { POSProductModal, SelectedOption } from '@/components/pos/POSProductModal';
 
@@ -668,14 +669,11 @@ export default function ManualOrderPOS() {
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm truncate">{item.product.name}</p>
                               {item.options.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {item.options.map((opt) => (
-                                    <Badge key={opt.optionId} variant="secondary" className="text-xs">
-                                      {opt.name}
-                                      {opt.priceModifier > 0 && ` +${formatCurrency(opt.priceModifier)}`}
-                                    </Badge>
-                                  ))}
-                                </div>
+                                <GroupedOptionsDisplay 
+                                  options={item.options} 
+                                  variant="badges"
+                                  className="mt-1"
+                                />
                               )}
                               <p className="text-xs text-muted-foreground mt-1">
                                 {formatCurrency(item.calculatedPrice)} cada

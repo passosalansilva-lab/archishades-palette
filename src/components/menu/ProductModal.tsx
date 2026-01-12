@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAcaiOptionsCache } from '@/hooks/useAcaiOptionsCache';
 import { cn } from '@/lib/utils';
+import { GroupedOptionsDisplay } from '@/components/ui/grouped-options-display';
 
 interface ProductOption {
   id: string;
@@ -1121,13 +1122,10 @@ export function CartDrawer({
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium truncate">{item.productName}</h4>
                     {item.options.length > 0 && (
-                      <div className="mt-1 space-y-0.5">
-                        {item.options.map((o, idx) => (
-                          <p key={idx} className="text-xs text-muted-foreground">
-                            + {o.name}
-                          </p>
-                        ))}
-                      </div>
+                      <GroupedOptionsDisplay 
+                        options={item.options} 
+                        className="mt-1"
+                      />
                     )}
                     {item.notes && (
                       <p className="text-xs text-muted-foreground italic mt-1">
