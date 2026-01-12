@@ -11,6 +11,10 @@ interface RealtimeOrdersOptions {
   playSound?: boolean;
 }
 
+// Track notified orders to prevent duplicates (shared across all instances)
+const realtimeNotifiedOrders = new Set<string>();
+const REALTIME_NOTIFICATION_COOLDOWN = 5000; // 5 seconds cooldown
+
 interface NotificationSoundSetting {
   event_type: 'new_order' | 'status_change';
   sound_key: string;
@@ -130,16 +134,61 @@ export function useRealtimeOrders({
           table: 'orders',
           filter: `company_id=eq.${companyId}`,
         },
-        (payload) => {
-          console.log('New order received:', payload);
+        async (payload) => {
+          const newOrder = payload.new;
+          
+          // Validate order data exists
+          if (!newOrder?.id || !newOrder?.customer_name || newOrder.total === undefined) {
+            console.warn('[useRealtimeOrders] Invalid order payload, skipping:', payload);
+            return;
+          }
+
+          // Check if we already notified for this order (prevent duplicates)
+          const notificationKey = `realtime-insert-${newOrder.id}`;
+          if (realtimeNotifiedOrders.has(notificationKey)) {
+            console.log('[useRealtimeOrders] Duplicate notification blocked for:', newOrder.id);
+            // Still call the callback for data refresh, just skip the notification
+            onOrderInsert?.(newOrder);
+            return;
+          }
+
+          // Add to notified set and remove after cooldown
+          realtimeNotifiedOrders.add(notificationKey);
+          setTimeout(() => realtimeNotifiedOrders.delete(notificationKey), REALTIME_NOTIFICATION_COOLDOWN);
+
+          // Verify order actually exists in database with items (prevent phantom notifications)
+          // Small delay to ensure order_items are inserted
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const { data: orderWithItems, error: verifyError } = await supabase
+            .from('orders')
+            .select('id, order_items(id)')
+            .eq('id', newOrder.id)
+            .maybeSingle();
+
+          if (verifyError || !orderWithItems) {
+            console.warn('[useRealtimeOrders] Phantom order detected (not found), skipping:', newOrder.id);
+            realtimeNotifiedOrders.delete(notificationKey);
+            return;
+          }
+
+          // Check if order has items (empty orders are phantom/incomplete)
+          const hasItems = orderWithItems.order_items && orderWithItems.order_items.length > 0;
+          if (!hasItems) {
+            console.warn('[useRealtimeOrders] Order without items detected, skipping:', newOrder.id);
+            realtimeNotifiedOrders.delete(notificationKey);
+            return;
+          }
+
+          console.log('[useRealtimeOrders] New order verified:', newOrder.id);
           playNewOrderSound();
 
-          toast.success(`Novo pedido de ${payload.new.customer_name}!`, {
-            description: `Valor: R$ ${Number(payload.new.total).toFixed(2)}`,
+          toast.success(`Novo pedido de ${newOrder.customer_name}!`, {
+            description: `Valor: R$ ${Number(newOrder.total).toFixed(2)}`,
             duration: 10000,
           });
 
-          onOrderInsert?.(payload.new);
+          onOrderInsert?.(newOrder);
         }
       )
       .on(
