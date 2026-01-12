@@ -27,6 +27,65 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+type IntegrationLevel = "info" | "warn" | "error";
+
+async function safeLogIntegrationEvent(params: {
+  provider: string;
+  source: string;
+  level: IntegrationLevel;
+  message: string;
+  details?: Record<string, unknown> | null;
+  companyId?: string | null;
+  userId?: string | null;
+}) {
+  try {
+    await supabase.from("integration_events" as any).insert({
+      provider: params.provider,
+      source: params.source,
+      level: params.level,
+      message: params.message,
+      details: params.details ?? null,
+      company_id: params.companyId ?? null,
+      user_id: params.userId ?? null,
+    });
+  } catch (err) {
+    // Não pode travar o fluxo por falha de observabilidade
+    console.error("Failed to write integration_events:", err);
+  }
+}
+
+async function notifySuperAdmins(params: {
+  title: string;
+  message: string;
+  type: "info" | "success" | "warning" | "error";
+  data?: Record<string, unknown>;
+}) {
+  try {
+    const { data: superAdmins } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "super_admin");
+
+    const userIds = (superAdmins ?? [])
+      .map((r: any) => r.user_id)
+      .filter((id: any) => typeof id === "string" && id.length > 0);
+
+    if (!userIds.length) return;
+
+    await supabase.from("notifications").insert(
+      userIds.map((userId: string) => ({
+        user_id: userId,
+        title: params.title,
+        message: params.message,
+        type: params.type,
+        data: params.data ?? null,
+      }))
+    );
+  } catch (err) {
+    console.error("Failed to notify super admins:", err);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -205,20 +264,76 @@ Deno.serve(async (req) => {
       </html>
     `;
 
-    // Send email if Resend is configured
-    if (resendApiKey) {
-      const resend = new Resend(resendApiKey);
-      
-      const emailResponse = await resend.emails.send({
-        from: "CardpOn <noreply@cardpondelivery.com>",
-        to: [ownerEmail],
-        subject: subject,
-        html: emailHtml,
-      });
+    // Envio de email (NUNCA pode travar o sistema)
+    const observabilityBase = {
+      provider: "resend",
+      source: "send-bonus-email",
+      companyId,
+      userId: ownerId,
+    } as const;
 
-      console.log("Email sent successfully:", emailResponse);
+    if (!resendApiKey) {
+      await safeLogIntegrationEvent({
+        ...observabilityBase,
+        level: "warn",
+        message: "RESEND_API_KEY não configurada — envio de email ignorado",
+        details: { companyName: company.name, ownerEmail },
+      });
     } else {
-      console.log("RESEND_API_KEY not configured, skipping email");
+      try {
+        const resend = new Resend(resendApiKey);
+
+        const emailResponse = await resend.emails.send({
+          from: "CardpOn <noreply@cardpondelivery.com>",
+          to: [ownerEmail],
+          subject: subject,
+          html: emailHtml,
+        });
+
+        console.log("Email sent successfully:", emailResponse);
+
+        await safeLogIntegrationEvent({
+          ...observabilityBase,
+          level: "info",
+          message: "Email enviado com sucesso",
+          details: {
+            companyName: company.name,
+            ownerEmail,
+            emailId: (emailResponse as any)?.id ?? null,
+          },
+        });
+      } catch (err: any) {
+        const errorPayload = {
+          name: err?.name ?? "Error",
+          message: err?.message ?? String(err),
+        };
+
+        console.error("Resend error:", errorPayload);
+
+        await safeLogIntegrationEvent({
+          ...observabilityBase,
+          level: "error",
+          message: "Falha ao enviar email via Resend",
+          details: {
+            companyName: company.name,
+            ownerEmail,
+            error: errorPayload,
+          },
+        });
+
+        await notifySuperAdmins({
+          title: "Falha no envio de email (Resend)",
+          message: `Falha ao enviar email de bônus para ${ownerEmail} (${company.name}).`,
+          type: "error",
+          data: {
+            provider: "resend",
+            source: "send-bonus-email",
+            companyId,
+            ownerId,
+            error: errorPayload,
+          },
+        });
+      }
     }
 
     // Create in-app notification
@@ -254,6 +369,18 @@ Deno.serve(async (req) => {
     );
   } catch (error: any) {
     console.error("Error in send-bonus-email:", error);
+
+    await safeLogIntegrationEvent({
+      provider: "send-bonus-email",
+      source: "send-bonus-email",
+      level: "error",
+      message: "Erro inesperado na edge function send-bonus-email",
+      details: {
+        name: error?.name ?? "Error",
+        message: error?.message ?? String(error),
+      },
+    });
+
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

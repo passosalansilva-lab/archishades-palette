@@ -215,9 +215,50 @@ export default function AdminCompanies() {
           
           if (emailError) {
             console.error('Error sending bonus email:', emailError);
+
+            // Observabilidade (apenas para super_admin) — não trava o fluxo
+            try {
+              await supabase.from('integration_events' as any).insert({
+                provider: 'resend',
+                source: 'send-bonus-email',
+                level: 'error',
+                message: emailError.message || 'Falha ao chamar edge function send-bonus-email',
+                company_id: bonusEditing.companyId,
+                user_id: company.owner_id,
+                details: {
+                  name: (emailError as any).name,
+                  context: (emailError as any).context,
+                },
+              });
+            } catch (logErr) {
+              console.warn('Falha ao registrar observabilidade:', logErr);
+            }
+
+            toast({
+              title: 'Email não enviado',
+              description: 'Não foi possível enviar o email de bônus (ver Admin → Logs).',
+              variant: 'destructive',
+            });
           }
         } catch (emailError) {
           console.error('Error sending bonus email:', emailError);
+
+          try {
+            await supabase.from('integration_events' as any).insert({
+              provider: 'resend',
+              source: 'send-bonus-email',
+              level: 'error',
+              message: (emailError as any)?.message || 'Erro ao chamar edge function send-bonus-email',
+              company_id: bonusEditing.companyId,
+              user_id: company.owner_id,
+              details: {
+                name: (emailError as any)?.name,
+              },
+            });
+          } catch (logErr) {
+            console.warn('Falha ao registrar observabilidade:', logErr);
+          }
+
           // Don't fail the whole operation if email fails
         }
       }
