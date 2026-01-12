@@ -139,19 +139,22 @@ export default function LotteryManagement() {
       if (ticketsError) throw ticketsError;
 
       // Aggregate tickets by user_id (preferred) or customer_id (fallback)
+      // IMPORTANT: When user_id is null, we MUST use customer_id as the unique key
       const holdersMap = new Map<string, Omit<TicketHolder, 'weighted_score' | 'chance_percent'>>();
       let total = 0;
 
       ticketsData?.forEach((ticket: any) => {
-        // Use user_id as key if available, otherwise use customer_id
-        const key = ticket.user_id || ticket.customers?.user_id || ticket.customer_id;
+        // Use user_id as key if available and not null, otherwise use customer_id
+        const userId = ticket.user_id || ticket.customers?.user_id;
+        const key = userId || `customer_${ticket.customer_id}`;
+        
         const existing = holdersMap.get(key);
         if (existing) {
           existing.total_tickets += ticket.quantity;
         } else {
           holdersMap.set(key, {
             customer_id: ticket.customer_id,
-            user_id: ticket.user_id || ticket.customers?.user_id || null,
+            user_id: userId || null,
             customer_name: ticket.customers.name,
             customer_phone: ticket.customers.phone,
             total_tickets: ticket.quantity,
