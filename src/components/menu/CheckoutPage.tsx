@@ -736,9 +736,8 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
     try {
       const cleanPhone = (data.customerPhone || '').replace(/\D/g, '');
 
-      // Verifica se já existe sessão autenticada (cliente já logado)
+      // Verifica se já existe sessão autenticada
       const { data: authData } = await supabase.auth.getUser();
-      let isLoggedIn = !!loggedCustomer;
 
       // Se o cliente salvo localmente não bate com o email/telefone digitado,
       // não pode reutilizar o customer_id antigo (evita cair em outro cliente).
@@ -749,7 +748,6 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
         (!!cleanPhone && storedPhone !== cleanPhone);
 
       if (loggedCustomer?.id && shouldResetCustomer) {
-        isLoggedIn = false;
         try {
           const key = getCustomerStorageKey(companyId);
           localStorage.removeItem(key);
@@ -762,17 +760,21 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
       }
 
       // Primeiro, obter ou criar o registro de cliente
-      // Regra: identificação do cliente por e-mail (telefone não deve decidir customer_id)
-      let customerId: string | null = normalizedEmail
-        ? null
-        : ((!shouldResetCustomer ? loggedCustomer?.id : null) || null);
+      // IMPORTANTE: Sempre tentar criar/vincular cliente, mesmo sem email (pedidos de mesa)
+      let customerId: string | null = (!shouldResetCustomer ? loggedCustomer?.id : null) || null;
+
+      // Se já temos um customerId válido do loggedCustomer, verificar se os dados batem
+      if (customerId && shouldResetCustomer) {
+        customerId = null;
+      }
 
       if (!customerId) {
         // Tenta encontrar cliente existente via função (RLS impede consulta direta)
+        // Prioridade: email primeiro, depois telefone
         if (normalizedEmail) {
           try {
             const { data: lookupResult } = await supabase.functions.invoke('lookup-customer', {
-              body: { email: normalizedEmail },
+              body: { email: normalizedEmail, companyId },
             });
             if (lookupResult?.customerId) {
               customerId = lookupResult.customerId;
@@ -798,26 +800,50 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
               }
             }
           } catch (e) {
+            console.error('Error looking up customer by email:', e);
             // Cliente não encontrado, será criado abaixo
           }
         }
 
-        // Se NÃO tiver e-mail, tenta pelo telefone (fallback)
-        if (!customerId && !normalizedEmail && cleanPhone) {
+        // Se NÃO encontrou por email, tenta pelo telefone
+        if (!customerId && cleanPhone) {
           try {
             const { data: lookupResult } = await supabase.functions.invoke('lookup-customer', {
-              body: { phone: cleanPhone },
+              body: { phone: cleanPhone, companyId },
             });
             if (lookupResult?.customerId) {
               customerId = lookupResult.customerId;
+              
+              // Atualiza o cliente local
+              const customerData: CustomerData = {
+                id: lookupResult.customerId,
+                name: lookupResult.name || data.customerName,
+                email: lookupResult.email || normalizedEmail,
+                phone: lookupResult.phone || cleanPhone,
+              };
+              setLoggedCustomer(customerData);
+              try {
+                const key = getCustomerStorageKey(companyId);
+                localStorage.setItem(key, JSON.stringify(customerData));
+                localStorage.removeItem('menupro_customer');
+                const identifier = customerData.email || customerData.phone;
+                if (identifier) {
+                  localStorage.setItem('menupro_last_customer_identifier', identifier);
+                }
+              } catch (e) {
+                console.error('Error saving customer to storage after phone lookup:', e);
+              }
             }
           } catch (e) {
+            console.error('Error looking up customer by phone:', e);
             // Cliente não encontrado, será criado abaixo
           }
         }
 
-        // Se ainda não encontrou, cria novo cliente
-        if (!customerId) {
+        // Se ainda não encontrou, cria novo cliente (sempre, mesmo sem email)
+        if (!customerId && (normalizedEmail || cleanPhone || data.customerName)) {
+          console.log('[CheckoutPage] Creating new customer:', { name: data.customerName, email: normalizedEmail, phone: cleanPhone });
+          
           const { data: newCustomer, error: customerError } = await supabase
             .from('customers')
             .insert({
@@ -829,9 +855,29 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
             .single();
 
           if (customerError) {
-            console.error('Error creating customer:', customerError);
+            console.error('[CheckoutPage] Error creating customer:', customerError);
+            
+            // Se erro de duplicata, tenta buscar o cliente existente
+            if (customerError.code === '23505') {
+              console.log('[CheckoutPage] Customer already exists, trying to find...');
+              
+              // Tenta buscar por email ou telefone
+              const { data: lookupResult } = await supabase.functions.invoke('lookup-customer', {
+                body: { 
+                  email: normalizedEmail || undefined, 
+                  phone: cleanPhone || undefined,
+                  companyId 
+                },
+              });
+              
+              if (lookupResult?.customerId) {
+                customerId = lookupResult.customerId;
+                console.log('[CheckoutPage] Found existing customer after duplicate error:', customerId);
+              }
+            }
           } else if (newCustomer) {
             customerId = newCustomer.id;
+            console.log('[CheckoutPage] Created new customer:', customerId);
 
             // Persistir cliente localmente para próximos pedidos
             const customerData: CustomerData = {
@@ -857,9 +903,8 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
         }
 
         // Se conseguimos um customerId (encontrado ou recém-criado),
-        // garante que o perfil básico fique salvo localmente mesmo
-        // quando foi a primeira compra sem login explícito
-        if (customerId && !isLoggedIn) {
+        // garante que o perfil básico fique salvo localmente
+        if (customerId && !loggedCustomer?.id) {
           const customerData: CustomerData = {
             id: customerId,
             name: data.customerName,
@@ -881,6 +926,9 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
           }
         }
       }
+      
+      // Log final do customerId para debug
+      console.log('[CheckoutPage] Final customerId for order:', customerId);
 
       let addressId: string | undefined = selectedAddress?.id;
       
