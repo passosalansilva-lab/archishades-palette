@@ -198,6 +198,7 @@ serve(async (req) => {
       options: {
         allow_create_pix_key: true,
         expired_at: expiredAtDate,
+        card_max_installment_number: 12,
       },
     };
 
