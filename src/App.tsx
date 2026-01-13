@@ -42,6 +42,7 @@ import PlansPage from "./pages/store/PlansPage";
 import InventoryManagement from "./pages/store/InventoryManagement";
 import ActivityLogs from "./pages/store/ActivityLogs";
 import HelpWiki from "./pages/store/HelpWiki";
+import IntegrationsDoc from "./pages/store/IntegrationsDoc";
 import KitchenDisplay from "./pages/store/KitchenDisplay";
 import StaffManagement from "./pages/store/StaffManagement";
 import CustomerReferrals from "./pages/store/CustomerReferrals";
@@ -347,6 +348,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <HelpWiki />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/integrations-doc"
+                element={
+                  <ProtectedRoute>
+                    <IntegrationsDoc />
                   </ProtectedRoute>
                 }
               />

@@ -161,6 +161,7 @@ const navGroups: NavGroup[] = [
     title: "Suporte",
     items: [
       { label: "Ajuda", href: "/dashboard/help", icon: HelpCircle, roles: ["super_admin", "store_owner", "delivery_driver", "store_staff"], featureKey: "help" },
+      { label: "Doc. Integrações", href: "/dashboard/integrations-doc", icon: BookOpen, roles: ["super_admin", "store_owner"], featureKey: "integrations_doc" },
     ],
   },
 ];
