@@ -92,6 +92,12 @@ export function PicPayPaymentScreen({
     if (status !== 'pending') return;
     
     setChecking(true);
+    console.log('[PicPayPaymentScreen] Checking payment status...', {
+      pendingId: paymentData.pendingId,
+      companyId,
+      paymentLinkId: paymentData.paymentLinkId,
+    });
+    
     try {
       const { data, error } = await supabase.functions.invoke('check-picpay-payment', {
         body: {
@@ -101,18 +107,24 @@ export function PicPayPaymentScreen({
         },
       });
 
+      console.log('[PicPayPaymentScreen] Check result:', { data, error });
+
       if (error) throw error;
 
       if (data?.approved) {
+        console.log('[PicPayPaymentScreen] Payment APPROVED! Order:', data.orderId);
         setStatus('approved');
         toast({ title: 'Pagamento confirmado!', description: 'Seu pedido foi realizado com sucesso.' });
         onSuccess(data.orderId);
       } else if (data?.status === 'CANCELLED' || data?.status === 'REFUNDED') {
+        console.log('[PicPayPaymentScreen] Payment cancelled/refunded:', data?.status);
         setStatus('error');
         toast({ title: 'Pagamento não aprovado', variant: 'destructive' });
+      } else {
+        console.log('[PicPayPaymentScreen] Payment still pending, status:', data?.status);
       }
     } catch (err) {
-      console.error('Error checking payment:', err);
+      console.error('[PicPayPaymentScreen] Error checking payment:', err);
     } finally {
       setChecking(false);
     }
