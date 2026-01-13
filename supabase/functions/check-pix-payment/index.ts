@@ -212,7 +212,7 @@ serve(async (req) => {
           coupon_id: orderData.coupon_id || null,
           discount_amount: orderData.discount_amount || 0,
           status: 'pending',
-          stripe_payment_intent_id: `mp_${String(body.paymentId)}`,
+          stripe_payment_intent_id: String(body.paymentId),
         });
 
       if (orderError) {
