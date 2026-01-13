@@ -39,9 +39,18 @@ export function PicPayPaymentScreen({
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [status, setStatus] = useState<'pending' | 'approved' | 'expired' | 'error'>('pending');
 
-  // Calculate time left
+  // Calculate time left - max 30 minutes (1800 seconds)
   useEffect(() => {
-    const expiresAt = new Date(paymentData.expiresAt).getTime();
+    let expiresAt = new Date(paymentData.expiresAt).getTime();
+    
+    // Fallback: if expiresAt is invalid or too far in the future, use 30 min from now
+    const maxExpiration = Date.now() + 30 * 60 * 1000;
+    const minExpiration = Date.now() - 60 * 1000; // Allow 1 min in the past for clock skew
+    
+    if (isNaN(expiresAt) || expiresAt > maxExpiration || expiresAt < minExpiration) {
+      console.warn('[PicPayPaymentScreen] Invalid expiresAt, using fallback:', paymentData.expiresAt);
+      expiresAt = maxExpiration;
+    }
     
     const updateTimer = () => {
       const now = Date.now();
