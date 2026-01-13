@@ -762,6 +762,79 @@ function PublicMenuContent() {
     }
   };
 
+  // Real-time subscription for product changes (activation/deactivation)
+  useEffect(() => {
+    if (!company?.id) return;
+
+    const channel = supabase
+      .channel(`public-menu-products-${company.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'products',
+          filter: `company_id=eq.${company.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            const updatedProduct = payload.new as any;
+            
+            setProducts((prevProducts) => {
+              // If product was deactivated, remove from list
+              if (!updatedProduct.is_active) {
+                return prevProducts.filter((p) => p.id !== updatedProduct.id);
+              }
+              
+              // If product was activated, add or update in list
+              const existingIndex = prevProducts.findIndex((p) => p.id === updatedProduct.id);
+              if (existingIndex >= 0) {
+                const updated = [...prevProducts];
+                updated[existingIndex] = { ...updated[existingIndex], ...updatedProduct };
+                return updated;
+              } else {
+                // Product was activated - add to list (fetch with options)
+                supabase
+                  .from('products')
+                  .select(`*, product_options (*)`)
+                  .eq('id', updatedProduct.id)
+                  .single()
+                  .then(({ data }) => {
+                    if (data) {
+                      setProducts((prev) => [...prev, data]);
+                    }
+                  });
+                return prevProducts;
+              }
+            });
+          } else if (payload.eventType === 'INSERT') {
+            const newProduct = payload.new as any;
+            if (newProduct.is_active) {
+              // Fetch complete product with options
+              supabase
+                .from('products')
+                .select(`*, product_options (*)`)
+                .eq('id', newProduct.id)
+                .single()
+                .then(({ data }) => {
+                  if (data) {
+                    setProducts((prev) => [...prev, data]);
+                  }
+                });
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const deletedProduct = payload.old as any;
+            setProducts((prev) => prev.filter((p) => p.id !== deletedProduct.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [company?.id]);
+
   // Get quantity of product in cart
   const getProductQuantityInCart = (productId: string): number => {
     return items
