@@ -42,6 +42,9 @@ interface PaymentRequest {
 const PICPAY_OAUTH_BASE = "https://checkout-api.picpay.com";
 const PICPAY_PAYMENTLINK_BASE = "https://api.picpay.com/v1/paymentlink";
 
+// Ajuda a confirmar se o deploy aplicado é o mais recente (aparece no response)
+const FUNCTION_VERSION = "2026-01-13T19:45:00Z";
+
 async function getPicPayAccessToken(clientId: string, clientSecret: string): Promise<string> {
   const tokenUrl = `${PICPAY_OAUTH_BASE}/oauth2/token`;
 
@@ -245,6 +248,9 @@ serve(async (req) => {
           status: picpayResponse.status,
           requestId: picpayRequestId,
           details: responseText,
+          // Debug (sem segredos): permite ver exatamente o payload enviado ao PicPay
+          sentPayload: createChargePayload,
+          functionVersion: FUNCTION_VERSION,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 502 }
       );
@@ -321,13 +327,14 @@ serve(async (req) => {
         // Use embedded mode if we have brcode, otherwise redirect
         mode: brcode && qrCodeBase64 ? "embedded" : "redirect",
         availableMethods: ["pix", "credit_card", "picpay_balance"],
+        functionVersion: FUNCTION_VERSION,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {
     console.error("[create-picpay-pix] Error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: errorMessage, functionVersion: FUNCTION_VERSION }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
