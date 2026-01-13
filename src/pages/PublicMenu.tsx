@@ -1907,6 +1907,7 @@ function PublicMenuContent() {
         product={selectedProduct}
         open={!!selectedProduct}
         onClose={() => setSelectedProduct(null)}
+        primaryColor={company.primary_color}
       />
 
       {/* Cart Drawer */}
