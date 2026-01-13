@@ -236,3 +236,6 @@ verify_jwt = false
 
 [functions.update-user-password]
 verify_jwt = false
+
+[functions.process-refund-request]
+verify_jwt = false
