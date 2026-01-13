@@ -63,6 +63,43 @@ interface ProductSheetProps {
   product: Product | null;
   open: boolean;
   onClose: () => void;
+  primaryColor?: string | null;
+}
+
+// Helper function to convert hex to HSL
+function hexToHsl(hex: string): string | null {
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length !== 6) return null;
+  const r = parseInt(cleanHex.slice(0, 2), 16) / 255;
+  const g = parseInt(cleanHex.slice(2, 4), 16) / 255;
+  const b = parseInt(cleanHex.slice(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  const hDeg = Math.round(h * 360);
+  const sPercent = Math.round(s * 100);
+  const lPercent = Math.round(l * 100);
+  return `${hDeg} ${sPercent}% ${lPercent}%`;
 }
 
 interface SelectedOption {
@@ -195,7 +232,7 @@ function OptionCard({
   );
 }
 
-export function ProductSheet({ product, open, onClose }: ProductSheetProps) {
+export function ProductSheet({ product, open, onClose, primaryColor }: ProductSheetProps) {
   const { addItem } = useCart();
   const acaiCache = useAcaiOptionsCache();
   const [quantity, setQuantity] = useState(1);
@@ -754,11 +791,16 @@ export function ProductSheet({ product, open, onClose }: ProductSheetProps) {
 
   const canAddToCart = validateRequiredGroups();
 
+  // Calculate primary color style
+  const primaryHsl = primaryColor ? hexToHsl(primaryColor) : null;
+  const colorStyle = primaryHsl ? { '--primary': primaryHsl } as React.CSSProperties : {};
+
   return (
     <Sheet open={open} onOpenChange={handleClose}>
       <SheetContent 
         side="right" 
         className="w-full sm:max-w-lg p-0 flex flex-col"
+        style={colorStyle}
       >
         {/* Header with back button */}
         <div className="flex-shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b">
