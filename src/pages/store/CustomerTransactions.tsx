@@ -173,10 +173,11 @@ export default function CustomerTransactions() {
       if (paymentTypeFilter === 'pix') {
         queryBuilder = queryBuilder.eq('payment_method', 'pix');
       } else if (paymentTypeFilter === 'card') {
-        queryBuilder = queryBuilder.like('stripe_payment_intent_id', 'mp_%');
+        // Cartão online é identificado por payment_method='online' ou prefixo mp_
+        queryBuilder = queryBuilder.or('payment_method.eq.online,stripe_payment_intent_id.like.mp_%');
       } else {
         // For "all", we want both PIX and card (online payments)
-        queryBuilder = queryBuilder.or('payment_method.eq.pix,stripe_payment_intent_id.like.mp_%');
+        queryBuilder = queryBuilder.or('payment_method.eq.pix,payment_method.eq.online,stripe_payment_intent_id.like.mp_%');
       }
 
       if (statusFilter !== 'all') {
@@ -190,9 +191,9 @@ export default function CustomerTransactions() {
       const txns = (data || []) as CustomerTransaction[];
       setTransactions(txns);
       
-      // Calculate stats
+      // Calculate stats - PIX é payment_method='pix', Cartão é 'online' ou mp_
       const pixTxns = txns.filter(t => t.payment_method === 'pix');
-      const cardTxns = txns.filter(t => t.stripe_payment_intent_id?.startsWith('mp_'));
+      const cardTxns = txns.filter(t => t.payment_method === 'online' || (t.stripe_payment_intent_id?.startsWith('mp_') && t.payment_method !== 'pix'));
       
       setStats({
         totalAmount: txns.reduce((sum, t) => sum + t.total, 0),
@@ -264,6 +265,7 @@ export default function CustomerTransactions() {
   };
 
   const getPaymentMethodBadge = (tx: CustomerTransaction) => {
+    // PIX: payment_method é 'pix'
     if (tx.payment_method === 'pix') {
       const provider = getPixProvider(tx.stripe_payment_intent_id);
       return (
@@ -273,7 +275,8 @@ export default function CustomerTransactions() {
         </Badge>
       );
     }
-    if (tx.stripe_payment_intent_id?.startsWith('mp_')) {
+    // Cartão online: payment_method é 'online' ou tem prefixo mp_
+    if (tx.payment_method === 'online' || tx.stripe_payment_intent_id?.startsWith('mp_')) {
       return (
         <Badge variant="outline" className="gap-1">
           <CreditCard className="w-3 h-3" />

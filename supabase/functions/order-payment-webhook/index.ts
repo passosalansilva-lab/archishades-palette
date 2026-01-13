@@ -286,7 +286,7 @@ serve(async (req) => {
       coupon_id: orderData.coupon_id || null,
       discount_amount: Number(orderData.discount_amount || 0),
       status: "pending",
-      stripe_payment_intent_id: `mp_${String(actualPaymentId)}`,
+      stripe_payment_intent_id: String(actualPaymentId),
       // Table order fields
       table_session_id: orderData.table_session_id || null,
       source: orderData.source || (isTableOrder ? 'table' : 'online'),
