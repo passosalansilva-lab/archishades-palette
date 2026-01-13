@@ -23,6 +23,7 @@ import AdminFeatures from "./pages/admin/AdminFeatures";
 import SystemSettings from "./pages/admin/SystemSettings";
 import DevDocs from "./pages/admin/DevDocs";
 import ReleaseNotes from "./pages/admin/ReleaseNotes";
+import EmailTemplates from "./pages/admin/EmailTemplates";
 import NfeManagement from "./pages/store/NfeManagement";
 import NfeSetup from "./pages/store/NfeSetup";
 import StoreSettings from "./pages/store/StoreSettings";
@@ -422,6 +423,14 @@ const App = () => (
                 element={
                   <ProtectedRoute requiredRoles={["super_admin"]}>
                     <ReleaseNotes />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/admin/email-templates"
+                element={
+                  <ProtectedRoute requiredRoles={["super_admin"]}>
+                    <EmailTemplates />
                   </ProtectedRoute>
                 }
               />

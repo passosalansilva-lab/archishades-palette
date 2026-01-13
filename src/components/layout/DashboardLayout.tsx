@@ -38,6 +38,7 @@ import {
   Gift,
   Activity,
   Rocket,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,6 +93,7 @@ const superAdminNavItems: NavItem[] = [
   { label: "Saúde das Integrações", href: "/dashboard/admin/integrations", icon: Activity, roles: ["super_admin"] },
   { label: "Config. Onboarding", href: "/dashboard/admin/onboarding", icon: BookOpen, roles: ["super_admin"] },
   { label: "Indicações (Admin)", href: "/dashboard/admin/referrals", icon: Crown, roles: ["super_admin"] },
+  { label: "Templates de Email", href: "/dashboard/admin/email-templates", icon: Mail, roles: ["super_admin"] },
   { label: "Notas de Versão", href: "/dashboard/admin/release-notes", icon: Rocket, roles: ["super_admin"] },
   { label: "Config. Sistema", href: "/dashboard/admin/system", icon: Settings, roles: ["super_admin"] },
 ];
