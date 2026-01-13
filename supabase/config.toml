@@ -227,3 +227,12 @@ verify_jwt = false
 
 [functions.send-lottery-winner-email]
 verify_jwt = false
+
+[functions.send-password-reset-code]
+verify_jwt = false
+
+[functions.verify-password-reset-code]
+verify_jwt = false
+
+[functions.update-user-password]
+verify_jwt = false
