@@ -145,31 +145,89 @@ serve(async (req) => {
     }
 
     const paymentData = JSON.parse(responseText);
-    
+
     // Log completo para debug - PicPay pode ter status em campos diferentes
     console.log("[check-picpay-payment] Full payment data keys:", Object.keys(paymentData));
     console.log("[check-picpay-payment] Raw status field:", paymentData.status);
     console.log("[check-picpay-payment] Charge status:", paymentData.charge?.status);
     console.log("[check-picpay-payment] Payment status:", paymentData.payment?.status);
     console.log("[check-picpay-payment] Transaction status:", paymentData.transaction?.status);
-    
+
     // Tentar encontrar o status em diferentes campos possíveis
-    const rawStatus = 
-      paymentData.status || 
-      paymentData.charge?.status || 
+    const rawStatus =
+      paymentData.status ||
+      paymentData.charge?.status ||
       paymentData.payment?.status ||
       paymentData.transaction?.status ||
       paymentData.payments?.[0]?.status ||
       "";
-    
-    const paymentStatus = String(rawStatus).toLowerCase();
-    
+
+    let paymentStatus = String(rawStatus).toLowerCase();
+
+    // 5) Aprovado - PicPay pode retornar "paid", "approved", "completed" ou "PAID"
+    const approvedStatuses = ["paid", "approved", "completed", "settled"];
+
+    // Alguns retornos do /paymentlink/{id} refletem o status do LINK (ex: active)
+    // e o status real do pagamento aparece em /paymentlink/{id}/transactions.
+    if (
+      !approvedStatuses.includes(paymentStatus) &&
+      !["expired", "inactive", "cancelled", "canceled", "refunded"].includes(paymentStatus)
+    ) {
+      try {
+        const txUrl = `${PICPAY_PAYMENTLINK_BASE}/${linkId}/transactions`;
+        console.log(`[check-picpay-payment] Querying payment transactions at: ${txUrl}`);
+
+        const txResp = await fetch(txUrl, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        const txText = await txResp.text();
+        console.log(`[check-picpay-payment] Transactions response status: ${txResp.status}`);
+        console.log(`[check-picpay-payment] Transactions response body: ${txText}`);
+
+        if (txResp.ok) {
+          const txJson = JSON.parse(txText);
+          const txList =
+            (Array.isArray(txJson) ? txJson : null) ||
+            txJson.transactions ||
+            txJson.data ||
+            txJson.items ||
+            [];
+
+          if (Array.isArray(txList) && txList.length) {
+            const normalized = txList
+              .map((t: any) =>
+                String(
+                  t.status ||
+                    t.transaction_status ||
+                    t.payment_status ||
+                    t.state ||
+                    t.situation ||
+                    ""
+                ).toLowerCase()
+              )
+              .filter(Boolean);
+
+            const paidTxStatus = normalized.find((s: string) => approvedStatuses.includes(s));
+            if (paidTxStatus) {
+              console.log("[check-picpay-payment] Found approved status in transactions:", paidTxStatus);
+              paymentStatus = paidTxStatus;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[check-picpay-payment] Could not query transactions endpoint:", e);
+      }
+    }
+
     // Log detalhado para debug
     console.log("[check-picpay-payment] Resolved payment status:", paymentStatus);
     console.log("[check-picpay-payment] Full payment data:", JSON.stringify(paymentData));
 
-    // 5) Aprovado - PicPay pode retornar "paid", "approved", "completed" ou "PAID"
-    const approvedStatuses = ["paid", "approved", "completed", "settled"];
     if (approvedStatuses.includes(paymentStatus)) {
       const { error: updateError } = await supabaseClient
         .from("pending_order_payments")
