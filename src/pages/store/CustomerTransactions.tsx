@@ -384,7 +384,8 @@ export default function CustomerTransactions() {
         .insert({
           company_id: companyId,
           order_id: selectedTransaction.id,
-          amount: selectedTransaction.total,
+          original_amount: selectedTransaction.total,
+          requested_amount: selectedTransaction.total,
           reason: refundReason.trim(),
           customer_name: selectedTransaction.customer_name,
           payment_method: selectedTransaction.payment_method === 'pix' ? 'pix' : 'card',
