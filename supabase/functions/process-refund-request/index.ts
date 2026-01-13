@@ -155,31 +155,63 @@ serve(async (req) => {
       })
       .eq("id", request_id);
 
-    // Get company payment settings
-    const { data: paymentSettings, error: settingsError } = await supabase
-      .from("company_payment_settings")
-      .select("mercadopago_access_token")
-      .eq("company_id", refundRequest.company_id)
-      .single();
+    // Check if this is a subscription refund (customer_name starts with "Assinatura -")
+    const isSubscriptionRefund = refundRequest.customer_name?.startsWith('Assinatura -');
+    console.log("[process-refund-request] Refund type:", { 
+      isSubscriptionRefund, 
+      customer_name: refundRequest.customer_name 
+    });
 
-    if (settingsError || !paymentSettings?.mercadopago_access_token) {
-      console.error("[process-refund-request] No access token:", settingsError);
-      
-      await supabase
-        .from("refund_requests")
-        .update({
-          status: 'failed',
-          error_message: "Configuração de pagamento não encontrada",
-        })
-        .eq("id", request_id);
+    let accessToken: string;
 
-      return new Response(
-        JSON.stringify({ error: "Configuração de pagamento não encontrada" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (isSubscriptionRefund) {
+      // For subscription refunds, use the platform's Mercado Pago token
+      const platformToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+      if (!platformToken) {
+        console.error("[process-refund-request] Platform access token not configured");
+        
+        await supabase
+          .from("refund_requests")
+          .update({
+            status: 'failed',
+            error_message: "Token da plataforma não configurado para estorno de assinatura",
+          })
+          .eq("id", request_id);
+
+        return new Response(
+          JSON.stringify({ error: "Token da plataforma não configurado" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      accessToken = platformToken;
+      console.log("[process-refund-request] Using platform token for subscription refund");
+    } else {
+      // For order refunds, use the store's Mercado Pago token
+      const { data: paymentSettings, error: settingsError } = await supabase
+        .from("company_payment_settings")
+        .select("mercadopago_access_token")
+        .eq("company_id", refundRequest.company_id)
+        .single();
+
+      if (settingsError || !paymentSettings?.mercadopago_access_token) {
+        console.error("[process-refund-request] No store access token:", settingsError);
+        
+        await supabase
+          .from("refund_requests")
+          .update({
+            status: 'failed',
+            error_message: "Configuração de pagamento da loja não encontrada",
+          })
+          .eq("id", request_id);
+
+        return new Response(
+          JSON.stringify({ error: "Configuração de pagamento da loja não encontrada" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      accessToken = paymentSettings.mercadopago_access_token;
+      console.log("[process-refund-request] Using store token for order refund");
     }
-
-    const accessToken = paymentSettings.mercadopago_access_token;
 
     // Get payment details from Mercado Pago
     const paymentResponse = await fetch(
@@ -290,8 +322,20 @@ serve(async (req) => {
       })
       .eq("id", request_id);
 
-    // Update order status
-    if (refundRequest.order_id) {
+    // Update order status or subscription payment status
+    if (isSubscriptionRefund) {
+      // Update subscription_payments status
+      await supabase
+        .from("subscription_payments")
+        .update({
+          payment_status: "refunded",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("payment_reference", refundRequest.payment_id);
+      
+      console.log("[process-refund-request] Updated subscription_payments status to refunded");
+    } else if (refundRequest.order_id) {
+      // Update order status for regular order refunds
       await supabase
         .from("orders")
         .update({
@@ -307,7 +351,7 @@ serve(async (req) => {
     // Log the refund
     await supabase.from("activity_logs").insert({
       company_id: refundRequest.company_id,
-      action: "refund_approved",
+      action: isSubscriptionRefund ? "subscription_refund_approved" : "refund_approved",
       details: {
         request_id: refundRequest.id,
         payment_id: refundRequest.payment_id,
@@ -315,6 +359,7 @@ serve(async (req) => {
         refund_id: refundData.id,
         refund_amount: refundRequest.requested_amount,
         approved_by: user.id,
+        is_subscription_refund: isSubscriptionRefund,
       },
     });
 
@@ -326,11 +371,18 @@ serve(async (req) => {
       .single();
 
     if (company) {
+      const notificationTitle = isSubscriptionRefund 
+        ? "Estorno de Assinatura Aprovado" 
+        : "Estorno Aprovado e Processado";
+      const notificationMessage = isSubscriptionRefund
+        ? `Seu estorno de assinatura no valor de R$ ${refundRequest.requested_amount.toFixed(2)} foi aprovado e processado com sucesso.`
+        : `Seu estorno de R$ ${refundRequest.requested_amount.toFixed(2)} foi aprovado e processado com sucesso.`;
+      
       await supabase.from("notifications").insert({
         company_id: refundRequest.company_id,
         user_id: company.owner_id,
-        title: "Estorno Aprovado e Processado",
-        message: `Seu estorno de R$ ${refundRequest.requested_amount.toFixed(2)} foi aprovado e processado com sucesso.`,
+        title: notificationTitle,
+        message: notificationMessage,
         type: "success",
       });
     }

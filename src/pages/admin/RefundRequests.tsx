@@ -16,7 +16,8 @@ import {
   CheckCircle,
   XCircle,
   CreditCard,
-  QrCode
+  QrCode,
+  Crown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -222,6 +223,28 @@ export default function RefundRequests() {
       );
     }
     return <Badge variant="outline">{method || 'Outro'}</Badge>;
+  };
+
+  // Verifica se é um estorno de assinatura pelo customer_name
+  const isSubscriptionRefund = (customerName: string) => {
+    return customerName?.startsWith('Assinatura -');
+  };
+
+  const getRefundTypeBadge = (customerName: string) => {
+    if (isSubscriptionRefund(customerName)) {
+      return (
+        <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+          <Crown className="w-3 h-3 mr-1" />
+          Assinatura
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline">
+        <CreditCard className="w-3 h-3 mr-1" />
+        Pedido
+      </Badge>
+    );
   };
 
   const handleApprove = async () => {
@@ -457,6 +480,7 @@ export default function RefundRequests() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Loja / Cliente</TableHead>
+                      <TableHead>Tipo</TableHead>
                       <TableHead>Valor</TableHead>
                       <TableHead>Método</TableHead>
                       <TableHead>Status</TableHead>
@@ -475,9 +499,14 @@ export default function RefundRequests() {
                             </p>
                             <p className="text-sm text-muted-foreground flex items-center gap-1">
                               <User className="h-3 w-3" />
-                              {req.customer_name}
+                              {isSubscriptionRefund(req.customer_name) 
+                                ? req.customer_name.replace('Assinatura - ', '')
+                                : req.customer_name}
                             </p>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {getRefundTypeBadge(req.customer_name)}
                         </TableCell>
                         <TableCell>
                           <div>
@@ -676,19 +705,31 @@ export default function RefundRequests() {
                 Aprovar Estorno
               </DialogTitle>
               <DialogDescription>
-                O estorno será processado imediatamente via Mercado Pago.
+                {selectedRequest && isSubscriptionRefund(selectedRequest.customer_name)
+                  ? 'O estorno de assinatura será processado usando as credenciais da plataforma.'
+                  : 'O estorno será processado imediatamente via Mercado Pago da loja.'}
               </DialogDescription>
             </DialogHeader>
             {selectedRequest && (
               <div className="space-y-4">
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
+                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Tipo</span>
+                    {getRefundTypeBadge(selectedRequest.customer_name)}
+                  </div>
+                  <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Loja</span>
                     <span className="font-medium">{selectedRequest.company?.name}</span>
                   </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Cliente</span>
-                    <span className="font-medium">{selectedRequest.customer_name}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {isSubscriptionRefund(selectedRequest.customer_name) ? 'Plano' : 'Cliente'}
+                    </span>
+                    <span className="font-medium">
+                      {isSubscriptionRefund(selectedRequest.customer_name)
+                        ? selectedRequest.customer_name.replace('Assinatura - ', '')
+                        : selectedRequest.customer_name}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Valor do Estorno</span>
@@ -699,7 +740,9 @@ export default function RefundRequests() {
                 <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                   <p className="text-sm text-yellow-700 dark:text-yellow-400">
                     <AlertCircle className="h-4 w-4 inline mr-1" />
-                    Esta ação não pode ser desfeita. O valor será devolvido ao cliente.
+                    {isSubscriptionRefund(selectedRequest.customer_name)
+                      ? 'Esta ação não pode ser desfeita. O valor será devolvido ao lojista.'
+                      : 'Esta ação não pode ser desfeita. O valor será devolvido ao cliente.'}
                   </p>
                 </div>
               </div>
