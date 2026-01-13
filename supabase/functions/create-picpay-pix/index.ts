@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
-import { qrcode } from "https://deno.land/x/qrcode@v2.0.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,14 +32,13 @@ interface PaymentRequest {
   notes?: string;
   needsChange?: boolean;
   changeFor?: number;
-  // Table order fields
   tableSessionId?: string;
   tableNumber?: number;
   source?: string;
 }
 
 // PicPay Payment Link API (produção)
-// Docs: https://developers-business.picpay.com/payment-link/en/docs/api/create-charge
+// Docs: https://developers-business.picpay.com/payment-link/docs/introduction
 const PICPAY_OAUTH_BASE = "https://checkout-api.picpay.com";
 const PICPAY_PAYMENTLINK_BASE = "https://api.picpay.com/v1/paymentlink";
 
@@ -82,25 +80,6 @@ function extractPaymentLinkId(link?: string | null): string | null {
     return parts.length ? parts[parts.length - 1] : null;
   } catch {
     return null;
-  }
-}
-
-// Generate QR Code as base64 from brcode string using Deno-compatible library
-async function generateQRCodeBase64(brcode: string): Promise<string> {
-  try {
-    // Generate QR code as base64 data URL
-    const qrResult = await qrcode(brcode, { size: 256 });
-    // Convert to string and extract base64 part
-    const dataUrl = String(qrResult);
-    const base64Match = dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
-    if (base64Match && base64Match[1]) {
-      return base64Match[1];
-    }
-    // If it doesn't match, return as-is (might already be base64)
-    return dataUrl;
-  } catch (err) {
-    console.error("[create-picpay-pix] Error generating QR code:", err);
-    throw new Error("Erro ao gerar QR Code");
   }
 }
 
@@ -198,45 +177,21 @@ serve(async (req) => {
     const redirectUrl = `${baseUrl}?payment=success&pending_id=${pendingId}`;
 
     // 3) Monta payload do Payment Link (PicPay)
-    const productCents = Math.max(0, Math.round((body.subtotal || 0) * 100));
-    const deliveryCents = Math.max(0, Math.round((body.deliveryFee || 0) * 100));
+    // Docs: https://developers-business.picpay.com/payment-link/docs/introduction
+    const totalCents = Math.max(1, Math.round((body.total || 0) * 100));
 
-    // PIX expira em 30 minutos
-    const expiredAtDate = new Date(Date.now() + 30 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10); // YYYY-MM-DD (PicPay só aceita data, não hora)
-
-    // Webhook URL para receber notificações do PicPay
-    const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/picpay-webhook`;
-
+    // Payload simplificado - apenas campos essenciais
     const createChargePayload = {
       charge: {
         name: `Pedido ${company.name}`.slice(0, 60),
-        description: "Pagamento via PicPay",
-        // order_number é limitado a 15 chars, usar apenas para display
-        order_number: String(pendingId).slice(0, 15),
-        // merchantChargeId é o campo correto para identificar o pedido no webhook
-        // PicPay retorna este valor no webhook payload como data.merchantChargeId
-        merchantChargeId: pendingId,
+        description: `Pedido #${String(pendingId).slice(0, 8)}`,
         redirect_url: redirectUrl,
-        // notification_url para receber webhooks (se suportado pela versão da API)
-        notification_url: webhookUrl,
-        callback_url: webhookUrl,
         payment: {
           methods: ["BRCODE"],
-          brcode_arrangements: ["PICPAY", "PIX"],
         },
         amounts: {
-          product: productCents,
-          delivery: deliveryCents,
+          product: totalCents,
         },
-      },
-      // Campos adicionais para garantir identificação
-      referenceId: pendingId,
-      externalReference: pendingId,
-      options: {
-        allow_create_pix_key: true,
-        expired_at: expiredAtDate,
       },
     };
 
@@ -304,15 +259,22 @@ serve(async (req) => {
       );
     }
 
-    // 6) Generate QR Code if brcode is available
+    // 6) Generate QR Code using external service if brcode is available
     let qrCodeBase64: string | null = null;
     if (brcode) {
       try {
-        qrCodeBase64 = await generateQRCodeBase64(brcode);
-        console.log("[create-picpay-pix] QR Code generated successfully");
+        // Use QR code API service
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(brcode)}`;
+        const qrResponse = await fetch(qrApiUrl);
+        if (qrResponse.ok) {
+          const qrBuffer = await qrResponse.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(qrBuffer)));
+          qrCodeBase64 = base64;
+          console.log("[create-picpay-pix] QR Code generated successfully");
+        }
       } catch (qrErr) {
         console.error("[create-picpay-pix] QR code generation failed:", qrErr);
-        // Continue without QR code - user can use redirect
+        // Continue without QR code - user can use copy/paste or redirect
       }
     }
 
