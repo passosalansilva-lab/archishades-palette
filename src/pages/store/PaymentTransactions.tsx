@@ -729,8 +729,9 @@ export default function PaymentTransactions() {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2 pt-4">
-                  {canRefund(selectedTransaction) && (
+                {/* Ações de Estorno */}
+                <div className="flex flex-col gap-2 pt-4 border-t">
+                  {canRefund(selectedTransaction) ? (
                     <Button
                       variant="destructive"
                       className="w-full"
@@ -739,7 +740,18 @@ export default function PaymentTransactions() {
                       <RotateCcw className="h-4 w-4 mr-2" />
                       Solicitar Estorno
                     </Button>
-                  )}
+                  ) : selectedTransaction.payment_status === 'paid' ? (
+                    <div className="p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+                      <AlertCircle className="h-4 w-4 inline mr-1" />
+                      Estorno não disponível para este método de pagamento.
+                    </div>
+                  ) : selectedTransaction.payment_status === 'refunded' ? (
+                    <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-sm text-purple-700 dark:text-purple-400">
+                      <RotateCcw className="h-4 w-4 inline mr-1" />
+                      Esta transação já foi estornada.
+                    </div>
+                  ) : null}
+                  
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
