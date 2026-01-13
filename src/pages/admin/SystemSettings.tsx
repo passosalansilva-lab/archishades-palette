@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, LayoutDashboard, Globe, UtensilsCrossed, Clock, Save, Play, CreditCard } from "lucide-react";
+import { Loader2, Upload, Trash2, LayoutDashboard, Globe, UtensilsCrossed, Clock, Save, Play, CreditCard, Palette, RotateCcw } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +77,14 @@ export default function SystemSettings() {
   // Payment integrations
   const [paymentIntegrations, setPaymentIntegrations] = useState<Record<string, boolean>>({});
   const [savingIntegration, setSavingIntegration] = useState<string | null>(null);
+  
+  // System colors
+  const [systemColors, setSystemColors] = useState({
+    primary: "#ea580c",
+    secondary: "#f5f5f4",
+    accent: "#fef3c7",
+  });
+  const [savingColors, setSavingColors] = useState(false);
 
   useEffect(() => {
     checkAccess();
@@ -111,7 +119,10 @@ export default function SystemSettings() {
     const keys = [
       ...LOGO_LOCATIONS.map(l => l.key), 
       ...PAYMENT_INTEGRATIONS.map(p => p.key),
-      "inactivity_suspension_days"
+      "inactivity_suspension_days",
+      "system_color_primary",
+      "system_color_secondary",
+      "system_color_accent",
     ];
     
     const { data, error } = await supabase
@@ -134,6 +145,12 @@ export default function SystemSettings() {
       data?.forEach(item => {
         if (item.key === "inactivity_suspension_days") {
           setInactivityDays(parseInt(item.value || "15", 10));
+        } else if (item.key === "system_color_primary" && item.value) {
+          setSystemColors(prev => ({ ...prev, primary: item.value! }));
+        } else if (item.key === "system_color_secondary" && item.value) {
+          setSystemColors(prev => ({ ...prev, secondary: item.value! }));
+        } else if (item.key === "system_color_accent" && item.value) {
+          setSystemColors(prev => ({ ...prev, accent: item.value! }));
         } else if (item.key.startsWith("integration_")) {
           integrationMap[item.key] = item.value === "true";
         } else {
@@ -143,6 +160,9 @@ export default function SystemSettings() {
       
       setLogos(logoMap);
       setPaymentIntegrations(integrationMap);
+      
+      // Apply saved system colors
+      applySystemColors(systemColors);
     }
     setLoading(false);
   };
@@ -296,6 +316,89 @@ export default function SystemSettings() {
     }
   };
 
+  // Convert hex to HSL for CSS variables
+  const hexToHsl = (hex: string): string => {
+    const cleanHex = hex.replace('#', '');
+    if (cleanHex.length !== 6) return "12 85% 52%";
+    
+    const r = parseInt(cleanHex.slice(0, 2), 16) / 255;
+    const g = parseInt(cleanHex.slice(2, 4), 16) / 255;
+    const b = parseInt(cleanHex.slice(4, 6), 16) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r:
+          h = (g - b) / d + (g < b ? 6 : 0);
+          break;
+        case g:
+          h = (b - r) / d + 2;
+          break;
+        case b:
+          h = (r - g) / d + 4;
+          break;
+      }
+      h /= 6;
+    }
+
+    const hDeg = Math.round(h * 360);
+    const sPercent = Math.round(s * 100);
+    const lPercent = Math.round(l * 100);
+    return `${hDeg} ${sPercent}% ${lPercent}%`;
+  };
+
+  const applySystemColors = (colors: typeof systemColors) => {
+    const root = document.documentElement;
+    root.style.setProperty('--primary', hexToHsl(colors.primary));
+    root.style.setProperty('--ring', hexToHsl(colors.primary));
+    root.style.setProperty('--sidebar-primary', hexToHsl(colors.primary));
+    root.style.setProperty('--sidebar-ring', hexToHsl(colors.primary));
+  };
+
+  const handleSaveColors = async () => {
+    setSavingColors(true);
+    try {
+      const updates = [
+        { key: "system_color_primary", value: systemColors.primary },
+        { key: "system_color_secondary", value: systemColors.secondary },
+        { key: "system_color_accent", value: systemColors.accent },
+      ];
+
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("system_settings")
+          .upsert(update, { onConflict: "key" });
+        
+        if (error) throw error;
+      }
+
+      applySystemColors(systemColors);
+      toast.success("Cores do sistema salvas com sucesso!");
+    } catch (error) {
+      console.error("Error saving colors:", error);
+      toast.error("Erro ao salvar cores");
+    } finally {
+      setSavingColors(false);
+    }
+  };
+
+  const handleResetColors = () => {
+    const defaultColors = {
+      primary: "#ea580c",
+      secondary: "#f5f5f4",
+      accent: "#fef3c7",
+    };
+    setSystemColors(defaultColors);
+    applySystemColors(defaultColors);
+    toast.info("Cores restauradas para o padrão");
+  };
+
   if (loading || !hasAccess) {
     return (
       <DashboardLayout>
@@ -316,7 +419,114 @@ export default function SystemSettings() {
           </p>
         </div>
 
-        {/* Inactivity Suspension Settings */}
+        {/* System Colors */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                <Palette className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Cores do Sistema</CardTitle>
+                <CardDescription>
+                  Personalize as cores do painel administrativo (não afeta as lojas)
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="primary-color">Cor Primária</Label>
+                <div className="flex gap-2">
+                  <div
+                    className="w-10 h-10 rounded-lg border cursor-pointer"
+                    style={{ backgroundColor: systemColors.primary }}
+                    onClick={() => document.getElementById("primary-color")?.click()}
+                  />
+                  <Input
+                    id="primary-color"
+                    type="color"
+                    value={systemColors.primary}
+                    onChange={(e) => {
+                      setSystemColors(prev => ({ ...prev, primary: e.target.value }));
+                      applySystemColors({ ...systemColors, primary: e.target.value });
+                    }}
+                    className="w-full h-10"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Botões, links e destaques</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="secondary-color">Cor Secundária</Label>
+                <div className="flex gap-2">
+                  <div
+                    className="w-10 h-10 rounded-lg border cursor-pointer"
+                    style={{ backgroundColor: systemColors.secondary }}
+                    onClick={() => document.getElementById("secondary-color")?.click()}
+                  />
+                  <Input
+                    id="secondary-color"
+                    type="color"
+                    value={systemColors.secondary}
+                    onChange={(e) => setSystemColors(prev => ({ ...prev, secondary: e.target.value }))}
+                    className="w-full h-10"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Fundos secundários</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="accent-color">Cor de Destaque</Label>
+                <div className="flex gap-2">
+                  <div
+                    className="w-10 h-10 rounded-lg border cursor-pointer"
+                    style={{ backgroundColor: systemColors.accent }}
+                    onClick={() => document.getElementById("accent-color")?.click()}
+                  />
+                  <Input
+                    id="accent-color"
+                    type="color"
+                    value={systemColors.accent}
+                    onChange={(e) => setSystemColors(prev => ({ ...prev, accent: e.target.value }))}
+                    className="w-full h-10"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Badges e alertas</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                onClick={handleSaveColors}
+                disabled={savingColors}
+                size="sm"
+              >
+                {savingColors ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Salvar Cores
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleResetColors}
+                size="sm"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Restaurar Padrão
+              </Button>
+            </div>
+
+            <div className="p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                Estas cores afetam apenas o painel administrativo do sistema. Cada loja mantém sua própria configuração de cores para o cardápio público.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <div className="flex items-center gap-3">

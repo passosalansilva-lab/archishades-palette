@@ -70,6 +70,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useSystemLogo } from "@/hooks/useSystemLogo";
+import { useSystemColors } from "@/hooks/useSystemColors";
 
 interface NavItem {
   label: string;
@@ -200,6 +201,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { hasFeatureAccess, getFeaturePrice, allFeatures, loading: featuresLoading } = useFeatureAccess();
   const { company: userCompany } = useUserCompany();
   const { logoUrl } = useSystemLogo("sidebar");
+  
+  // Load and apply system colors for the dashboard
+  useSystemColors();
 
   // Enable real-time order notifications
   const { realtimeStatus } = useOrderNotifications();
