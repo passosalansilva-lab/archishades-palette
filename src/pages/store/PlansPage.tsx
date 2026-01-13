@@ -14,6 +14,7 @@ import {
   XCircle,
   CreditCard,
   Calendar,
+  Receipt,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { SubscriptionPaymentHistory } from '@/components/plans/SubscriptionPaymentHistory';
 
 interface Plan {
   key: string;
@@ -709,6 +711,11 @@ export default function PlansPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Histórico de Pagamentos de Assinatura */}
+        {company && subscription?.subscribed && (
+          <SubscriptionPaymentHistory companyId={company.id} />
         )}
 
         {/* Aviso de empresa pendente */}
