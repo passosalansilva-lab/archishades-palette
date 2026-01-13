@@ -146,11 +146,14 @@ serve(async (req) => {
 
     const paymentData = JSON.parse(responseText);
     const paymentStatus = String(paymentData.status || "").toLowerCase();
-
+    
+    // Log detalhado para debug
     console.log("[check-picpay-payment] Payment status:", paymentStatus);
+    console.log("[check-picpay-payment] Full payment data:", JSON.stringify(paymentData));
 
-    // 5) Aprovado
-    if (paymentStatus === "paid") {
+    // 5) Aprovado - PicPay pode retornar "paid", "approved", "completed" ou "PAID"
+    const approvedStatuses = ["paid", "approved", "completed", "settled"];
+    if (approvedStatuses.includes(paymentStatus)) {
       const { error: updateError } = await supabaseClient
         .from("pending_order_payments")
         .update({ status: "processing" })
