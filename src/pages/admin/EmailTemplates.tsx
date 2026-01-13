@@ -663,6 +663,297 @@ const DEFAULT_TEMPLATES: Partial<EmailTemplate>[] = [
 </body>
 </html>`,
   },
+  {
+    slug: "subscription-payment-failed",
+    name: "Falha no Pagamento da Assinatura",
+    description: "Email enviado quando o pagamento da assinatura falha",
+    subject: "Falha no pagamento da assinatura - {{company_name}}",
+    variables: [
+      { key: "{{owner_name}}", description: "Nome do proprietário", example: "José" },
+      { key: "{{company_name}}", description: "Nome da empresa", example: "Pizzaria do Zé" },
+      { key: "{{plan_name}}", description: "Nome do plano", example: "Profissional" },
+      { key: "{{renew_url}}", description: "URL para renovar", example: "https://cardpondelivery.com/dashboard/planos" },
+    ],
+    html_content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">⚠️ Falha no Pagamento</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b;">Olá <strong>{{owner_name}}</strong>,</p>
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b; line-height: 1.6;">
+                Não conseguimos processar o pagamento da sua assinatura <strong>{{plan_name}}</strong> para a empresa <strong>{{company_name}}</strong>.
+              </p>
+              <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                <p style="margin: 0; font-size: 14px; color: #92400e;"><strong>Você tem 7 dias para regularizar</strong> sem que seus pedidos sejam bloqueados.</p>
+              </div>
+              <div style="text-align: center; margin-top: 30px;">
+                <a href="{{renew_url}}" style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">Renovar Assinatura</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+  },
+  {
+    slug: "subscription-payment-pending",
+    name: "Pagamento PIX Pendente",
+    description: "Email enviado quando o pagamento PIX está pendente",
+    subject: "Pagamento PIX pendente - {{company_name}}",
+    variables: [
+      { key: "{{owner_name}}", description: "Nome do proprietário", example: "José" },
+      { key: "{{company_name}}", description: "Nome da empresa", example: "Pizzaria do Zé" },
+      { key: "{{plan_name}}", description: "Nome do plano", example: "Profissional" },
+      { key: "{{amount}}", description: "Valor do pagamento", example: "R$ 99,90" },
+      { key: "{{renew_url}}", description: "URL para renovar", example: "https://cardpondelivery.com/dashboard/planos" },
+    ],
+    html_content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #3b82f6, #2563eb); padding: 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">⏳ Pagamento Pendente</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b;">Olá <strong>{{owner_name}}</strong>,</p>
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b; line-height: 1.6;">
+                O pagamento PIX de <strong>{{amount}}</strong> para o plano <strong>{{plan_name}}</strong> ainda não foi confirmado.
+              </p>
+              <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 16px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                <p style="margin: 0; font-size: 14px; color: #1e40af;">Se você já realizou o pagamento, aguarde alguns minutos para a confirmação automática.</p>
+              </div>
+              <div style="text-align: center; margin-top: 30px;">
+                <a href="{{renew_url}}" style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">Acessar Painel</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+  },
+  {
+    slug: "subscription-expiring-soon",
+    name: "Assinatura Expirando",
+    description: "Email enviado quando a assinatura vai expirar em breve",
+    subject: "Sua assinatura vai expirar em breve - {{company_name}}",
+    variables: [
+      { key: "{{owner_name}}", description: "Nome do proprietário", example: "José" },
+      { key: "{{company_name}}", description: "Nome da empresa", example: "Pizzaria do Zé" },
+      { key: "{{plan_name}}", description: "Nome do plano", example: "Profissional" },
+      { key: "{{renew_url}}", description: "URL para renovar", example: "https://cardpondelivery.com/dashboard/planos" },
+    ],
+    html_content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #3b82f6, #2563eb); padding: 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">📅 Assinatura Expirando</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b;">Olá <strong>{{owner_name}}</strong>,</p>
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b; line-height: 1.6;">
+                Sua assinatura do plano <strong>{{plan_name}}</strong> para a empresa <strong>{{company_name}}</strong> vai expirar em breve.
+              </p>
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b; line-height: 1.6;">
+                Renove agora para continuar aproveitando todos os benefícios.
+              </p>
+              <div style="text-align: center; margin-top: 30px;">
+                <a href="{{renew_url}}" style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">Renovar Assinatura</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+  },
+  {
+    slug: "subscription-grace-period",
+    name: "Período de Carência Ativado",
+    description: "Email enviado quando a empresa entra no período de carência",
+    subject: "Período de carência ativado - {{company_name}}",
+    variables: [
+      { key: "{{owner_name}}", description: "Nome do proprietário", example: "José" },
+      { key: "{{company_name}}", description: "Nome da empresa", example: "Pizzaria do Zé" },
+      { key: "{{plan_name}}", description: "Nome do plano", example: "Profissional" },
+      { key: "{{grace_end}}", description: "Data final da carência", example: "15/01/2025" },
+      { key: "{{renew_url}}", description: "URL para renovar", example: "https://cardpondelivery.com/dashboard/planos" },
+    ],
+    html_content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">⏰ Período de Carência</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b;">Olá <strong>{{owner_name}}</strong>,</p>
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b; line-height: 1.6;">
+                Sua assinatura do plano <strong>{{plan_name}}</strong> venceu, mas ativamos um <strong>período de carência de 7 dias</strong>.
+              </p>
+              <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                <p style="margin: 0; font-size: 14px; color: #92400e;"><strong>Prazo final:</strong> {{grace_end}}</p>
+              </div>
+              <div style="text-align: center; margin-top: 30px;">
+                <a href="{{renew_url}}" style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">Renovar Assinatura</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+  },
+  {
+    slug: "subscription-grace-period-ending",
+    name: "Carência Acabando",
+    description: "Email urgente quando faltam 2 dias para fim da carência",
+    subject: "URGENTE: Período de carência acabando - {{company_name}}",
+    variables: [
+      { key: "{{owner_name}}", description: "Nome do proprietário", example: "José" },
+      { key: "{{company_name}}", description: "Nome da empresa", example: "Pizzaria do Zé" },
+      { key: "{{plan_name}}", description: "Nome do plano", example: "Profissional" },
+      { key: "{{grace_end}}", description: "Data final da carência", example: "15/01/2025" },
+      { key: "{{renew_url}}", description: "URL para renovar", example: "https://cardpondelivery.com/dashboard/planos" },
+    ],
+    html_content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #ef4444, #dc2626); padding: 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">🚨 Carência Acabando!</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b;">Olá <strong>{{owner_name}}</strong>,</p>
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b; line-height: 1.6;">
+                <strong>Faltam apenas 2 dias</strong> para o fim do período de carência da sua assinatura do plano <strong>{{plan_name}}</strong>.
+              </p>
+              <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                <p style="margin: 0; font-size: 14px; color: #991b1b;"><strong>Data limite:</strong> {{grace_end}}<br>Após essa data, sua conta será rebaixada para o plano gratuito.</p>
+              </div>
+              <div style="text-align: center; margin-top: 30px;">
+                <a href="{{renew_url}}" style="display: inline-block; background: #ef4444; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">Renovar AGORA</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+  },
+  {
+    slug: "subscription-expired",
+    name: "Assinatura Expirada",
+    description: "Email enviado quando a assinatura expira definitivamente",
+    subject: "Assinatura expirada - {{company_name}}",
+    variables: [
+      { key: "{{owner_name}}", description: "Nome do proprietário", example: "José" },
+      { key: "{{company_name}}", description: "Nome da empresa", example: "Pizzaria do Zé" },
+      { key: "{{plan_name}}", description: "Nome do plano", example: "Profissional" },
+      { key: "{{renew_url}}", description: "URL para renovar", example: "https://cardpondelivery.com/dashboard/planos" },
+    ],
+    html_content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #ef4444, #dc2626); padding: 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">❌ Assinatura Expirada</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b;">Olá <strong>{{owner_name}}</strong>,</p>
+              <p style="margin: 0 0 20px; font-size: 16px; color: #52525b; line-height: 1.6;">
+                Sua assinatura do plano <strong>{{plan_name}}</strong> expirou e sua conta foi rebaixada para o <strong>plano gratuito</strong>.
+              </p>
+              <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                <p style="margin: 0; font-size: 14px; color: #991b1b;"><strong>Importante:</strong> Se você ultrapassar o limite de faturamento do plano gratuito, seus pedidos podem ser bloqueados.</p>
+              </div>
+              <div style="text-align: center; margin-top: 30px;">
+                <a href="{{renew_url}}" style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">Renovar Assinatura</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+  },
 ];
 
 export default function EmailTemplates() {
