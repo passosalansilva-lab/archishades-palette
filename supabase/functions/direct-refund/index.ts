@@ -437,7 +437,7 @@ serve(async (req) => {
       refundResult = await processMercadoPagoRefund(
         mpPaymentId,
         paymentSettings.mercadopago_access_token,
-        order_id
+        order.id
       );
     }
 
@@ -456,7 +456,7 @@ serve(async (req) => {
         status: "cancelled",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", order_id);
+      .eq("id", order.id);
 
     if (updateError) {
       console.error("[direct-refund] Error updating order:", updateError);
@@ -465,7 +465,7 @@ serve(async (req) => {
     // Log the refund in refund_requests as completed
     await supabase.from("refund_requests").insert({
       company_id: order.company_id,
-      order_id: order_id,
+      order_id: order.id,
       original_amount: order.total,
       requested_amount: order.total,
       requested_by: user.id,
@@ -485,7 +485,7 @@ serve(async (req) => {
       company_id: order.company_id,
       action: "direct_refund",
       details: {
-        order_id,
+        order_id: order.id,
         payment_id: paymentId,
         refund_id: refundResult.refund_id,
         amount: order.total,
@@ -495,7 +495,7 @@ serve(async (req) => {
     });
 
     console.log("[direct-refund] Refund successful:", {
-      order_id,
+      order_id: order.id,
       refund_id: refundResult.refund_id,
       amount: order.total,
     });
