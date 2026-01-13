@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Check, Copy, Loader2, AlertCircle, ArrowLeft, Clock, RefreshCw, XCircle } from 'lucide-react';
+import { Check, Copy, Loader2, AlertCircle, ArrowLeft, Clock, RefreshCw, XCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,17 +35,17 @@ export function PicPayPaymentScreen({
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [status, setStatus] = useState<'pending' | 'approved' | 'expired' | 'error'>('pending');
+  const [checkCount, setCheckCount] = useState(0);
 
-  // Calculate time left - max 30 minutes (1800 seconds)
+  // Calcular tempo restante - máximo 30 minutos
   useEffect(() => {
     let expiresAt = new Date(paymentData.expiresAt).getTime();
     
-    // Fallback: if expiresAt is invalid or too far in the future, use 30 min from now
+    // Fallback: se expiresAt é inválido, usar 30 min a partir de agora
     const maxExpiration = Date.now() + 30 * 60 * 1000;
-    const minExpiration = Date.now() - 60 * 1000; // Allow 1 min in the past for clock skew
+    const minExpiration = Date.now() - 60 * 1000;
     
     if (isNaN(expiresAt) || expiresAt > maxExpiration || expiresAt < minExpiration) {
       console.warn('[PicPayPaymentScreen] Invalid expiresAt, using fallback:', paymentData.expiresAt);
@@ -68,14 +68,14 @@ export function PicPayPaymentScreen({
     return () => clearInterval(interval);
   }, [paymentData.expiresAt, onExpired]);
 
-  // Format time
+  // Formatar tempo
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Copy PIX code
+  // Copiar código PIX
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(paymentData.qrCode);
@@ -87,15 +87,18 @@ export function PicPayPaymentScreen({
     }
   };
 
-  // Check payment status
+  // Verificar status do pagamento
   const checkPaymentStatus = useCallback(async () => {
     if (status !== 'pending') return;
     
     setChecking(true);
+    setCheckCount(prev => prev + 1);
+    
     console.log('[PicPayPaymentScreen] Checking payment status...', {
       pendingId: paymentData.pendingId,
       companyId,
       paymentLinkId: paymentData.paymentLinkId,
+      checkCount: checkCount + 1,
     });
     
     try {
@@ -116,47 +119,54 @@ export function PicPayPaymentScreen({
         setStatus('approved');
         toast({ title: 'Pagamento confirmado!', description: 'Seu pedido foi realizado com sucesso.' });
         onSuccess(data.orderId);
-      } else if (data?.status === 'CANCELLED' || data?.status === 'REFUNDED') {
-        console.log('[PicPayPaymentScreen] Payment cancelled/refunded:', data?.status);
-        setStatus('error');
-        toast({ title: 'Pagamento não aprovado', variant: 'destructive' });
       } else {
-        console.log('[PicPayPaymentScreen] Payment still pending, status:', data?.status);
+        const normalizedStatus = String(data?.status || '').toLowerCase();
+        
+        if (['cancelled', 'canceled', 'refunded', 'expired', 'rejected', 'failed'].includes(normalizedStatus)) {
+          console.log('[PicPayPaymentScreen] Payment cancelled/failed:', normalizedStatus);
+          setStatus('error');
+          toast({ title: 'Pagamento não aprovado', variant: 'destructive' });
+        } else {
+          console.log('[PicPayPaymentScreen] Payment still pending, status:', data?.status);
+        }
       }
     } catch (err) {
       console.error('[PicPayPaymentScreen] Error checking payment:', err);
-      const msg = err instanceof Error ? err.message : 'Erro ao verificar pagamento';
-      toast({
-        title: 'Falha ao verificar pagamento',
-        description: msg,
-        variant: 'destructive',
-      });
+      // Não mostrar erro para o usuário em verificações automáticas
+      if (checking) {
+        toast({
+          title: 'Falha ao verificar pagamento',
+          description: 'Tentando novamente...',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setChecking(false);
     }
-  }, [paymentData, companyId, status, onSuccess, toast]);
+  }, [paymentData, companyId, status, onSuccess, toast, checkCount, checking]);
 
-  // Handle cancel
-  const handleCancelPayment = async () => {
-    setCancelling(true);
-    try {
-      toast({ 
-        title: 'Pagamento cancelado', 
-        description: 'Você pode escolher outra forma de pagamento.' 
-      });
-      onCancel();
-    } finally {
-      setCancelling(false);
-    }
-  };
-
-  // Auto-check every 5 seconds
+  // Auto-check a cada 5 segundos
   useEffect(() => {
     if (status !== 'pending') return;
     
+    // Primeira verificação após 3 segundos
+    const firstCheck = setTimeout(checkPaymentStatus, 3000);
+    
+    // Verificações subsequentes a cada 5 segundos
     const interval = setInterval(checkPaymentStatus, 5000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearTimeout(firstCheck);
+      clearInterval(interval);
+    };
   }, [checkPaymentStatus, status]);
+
+  // Abrir link de pagamento no PicPay
+  const handleOpenPaymentLink = () => {
+    if (paymentData.paymentUrl) {
+      window.open(paymentData.paymentUrl, '_blank');
+    }
+  };
 
   if (status === 'approved') {
     return (
@@ -179,6 +189,22 @@ export function PicPayPaymentScreen({
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-2">PIX Expirado</h2>
         <p className="text-muted-foreground mb-6">O tempo para pagamento expirou.</p>
+        <Button onClick={onCancel} variant="outline">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Voltar ao checkout
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
+        <div className="w-20 h-20 rounded-full bg-destructive/20 flex items-center justify-center mb-6">
+          <XCircle className="w-10 h-10 text-destructive" />
+        </div>
+        <h2 className="text-2xl font-bold text-foreground mb-2">Pagamento não aprovado</h2>
+        <p className="text-muted-foreground mb-6">Houve um problema com o pagamento. Tente novamente.</p>
         <Button onClick={onCancel} variant="outline">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Voltar ao checkout
@@ -218,7 +244,7 @@ export function PicPayPaymentScreen({
           <span className="text-sm text-muted-foreground">para pagar</span>
         </div>
 
-        {/* Amount */}
+        {/* Valor */}
         <div className="text-center mb-6">
           <p className="text-sm text-muted-foreground">Valor a pagar</p>
           <p className="text-3xl font-bold text-[#21c25e]">
@@ -256,28 +282,42 @@ export function PicPayPaymentScreen({
           </div>
         </div>
 
-        {/* Copy and Paste */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-4">
-          <p className="text-sm font-medium mb-2">Código PIX copia e cola:</p>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-muted rounded-lg p-3 font-mono text-xs break-all max-h-20 overflow-auto">
-              {paymentData.qrCode}
+        {/* Código Copia e Cola */}
+        {paymentData.qrCode && (
+          <div className="bg-card border border-border rounded-xl p-4 mb-4">
+            <p className="text-sm font-medium mb-2">Código PIX copia e cola:</p>
+            <div className="flex gap-2">
+              <div className="flex-1 bg-muted rounded-lg p-3 font-mono text-xs break-all max-h-20 overflow-auto">
+                {paymentData.qrCode}
+              </div>
+              <Button
+                onClick={handleCopy}
+                variant={copied ? "default" : "outline"}
+                className="shrink-0"
+              >
+                {copied ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </Button>
             </div>
-            <Button
-              onClick={handleCopy}
-              variant={copied ? "default" : "outline"}
-              className="shrink-0"
-            >
-              {copied ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Copy className="w-4 h-4" />
-              )}
-            </Button>
           </div>
-        </div>
+        )}
 
-        {/* Manual Check */}
+        {/* Link para pagar no PicPay */}
+        {paymentData.paymentUrl && (
+          <Button
+            onClick={handleOpenPaymentLink}
+            variant="outline"
+            className="w-full mb-2"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Pagar no site do PicPay
+          </Button>
+        )}
+
+        {/* Verificação Manual */}
         <Button
           onClick={checkPaymentStatus}
           variant="outline"
@@ -292,22 +332,24 @@ export function PicPayPaymentScreen({
           {checking ? 'Verificando...' : 'Já paguei, verificar'}
         </Button>
 
-        {/* Cancel Payment */}
+        {/* Status de verificação */}
+        {checkCount > 0 && (
+          <p className="text-xs text-center text-muted-foreground mt-2">
+            Verificações realizadas: {checkCount}
+          </p>
+        )}
+
+        {/* Cancelar */}
         <Button
-          onClick={handleCancelPayment}
+          onClick={onCancel}
           variant="ghost"
           className="w-full mt-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-          disabled={cancelling}
         >
-          {cancelling ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <XCircle className="w-4 h-4 mr-2" />
-          )}
-          {cancelling ? 'Cancelando...' : 'Cancelar e escolher outro pagamento'}
+          <XCircle className="w-4 h-4 mr-2" />
+          Cancelar e escolher outro pagamento
         </Button>
 
-        {/* Instructions */}
+        {/* Instruções */}
         <div className="mt-6 p-4 bg-muted/50 rounded-lg">
           <h3 className="font-medium mb-2">Como pagar:</h3>
           <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">

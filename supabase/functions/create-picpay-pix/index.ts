@@ -39,18 +39,15 @@ interface PaymentRequest {
 
 // PicPay Payment Link API (produção)
 // Docs: https://developers-business.picpay.com/payment-link/docs/introduction
-const PICPAY_OAUTH_BASE = "https://checkout-api.picpay.com";
-const PICPAY_PAYMENTLINK_BASE = "https://api.picpay.com/v1/paymentlink";
+const PICPAY_OAUTH_URL = "https://checkout-api.picpay.com/oauth2/token";
+const PICPAY_PAYMENTLINK_URL = "https://api.picpay.com/v1/paymentlink/create";
 
-// Ajuda a confirmar se o deploy aplicado é o mais recente (aparece no response)
-const FUNCTION_VERSION = "2026-01-13T19:45:00Z";
+const FUNCTION_VERSION = "2026-01-13T21:00:00Z";
 
 async function getPicPayAccessToken(clientId: string, clientSecret: string): Promise<string> {
-  const tokenUrl = `${PICPAY_OAUTH_BASE}/oauth2/token`;
+  console.log("[create-picpay-pix] Requesting OAuth token...");
 
-  console.log(`[create-picpay-pix] Requesting OAuth token from ${tokenUrl}...`);
-
-  const response = await fetch(tokenUrl, {
+  const response = await fetch(PICPAY_OAUTH_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -65,25 +62,15 @@ async function getPicPayAccessToken(clientId: string, clientSecret: string): Pro
 
   const responseText = await response.text();
   console.log(`[create-picpay-pix] Token response status: ${response.status}`);
-  console.log(`[create-picpay-pix] Token response body: ${responseText}`);
 
   if (!response.ok) {
-    throw new Error(`Erro ao obter token de acesso do PicPay: ${response.status} - ${responseText}`);
+    console.error("[create-picpay-pix] Token error:", responseText);
+    throw new Error(`Erro ao obter token de acesso do PicPay: ${response.status}`);
   }
 
   const data = JSON.parse(responseText);
-  console.log("[create-picpay-pix] OAuth token obtained successfully, scope:", data.scope);
+  console.log("[create-picpay-pix] OAuth token obtained successfully");
   return data.access_token;
-}
-
-function extractPaymentLinkId(link?: string | null): string | null {
-  if (!link) return null;
-  try {
-    const parts = link.split("/").filter(Boolean);
-    return parts.length ? parts[parts.length - 1] : null;
-  } catch {
-    return null;
-  }
 }
 
 serve(async (req) => {
@@ -107,9 +94,10 @@ serve(async (req) => {
       });
     }
 
+    // Buscar credenciais PicPay
     const { data: paymentSettings, error: settingsError } = await supabaseClient
       .from("company_payment_settings")
-      .select("*")
+      .select("picpay_client_id, picpay_client_secret")
       .eq("company_id", body.companyId)
       .eq("picpay_enabled", true)
       .eq("picpay_verified", true)
@@ -123,6 +111,7 @@ serve(async (req) => {
       });
     }
 
+    // Buscar dados da empresa
     const { data: company, error: companyError } = await supabaseClient
       .from("companies")
       .select("name, slug")
@@ -133,7 +122,7 @@ serve(async (req) => {
       throw new Error("Empresa não encontrada");
     }
 
-    // 1) Cria registro de pedido pendente
+    // Criar registro de pedido pendente
     const pendingOrderData = {
       company_id: body.companyId,
       items: body.items,
@@ -150,11 +139,9 @@ serve(async (req) => {
       needs_change: body.needsChange,
       change_for: body.changeFor,
       payment_method: "picpay",
-      created_at: new Date().toISOString(),
-      // Table order fields
       table_session_id: body.tableSessionId || null,
       table_number: body.tableNumber || null,
-      source: body.source || 'online',
+      source: body.source || "online",
     };
 
     const { data: pendingOrder, error: pendingError } = await supabaseClient
@@ -175,31 +162,33 @@ serve(async (req) => {
 
     const pendingId = pendingOrder.id;
 
-    // 2) Monta redirect URL (alinha com o PublicMenu: query param 'payment')
-    const baseUrl = `https://${company.slug}.lovable.app/${company.slug}`;
-    const redirectUrl = `${baseUrl}?payment=success&pending_id=${pendingId}`;
+    // Obter token OAuth2
+    const accessToken = await getPicPayAccessToken(
+      paymentSettings.picpay_client_id,
+      paymentSettings.picpay_client_secret
+    );
 
-    // 3) Monta payload do Payment Link (PicPay)
-    // Docs: https://developers-business.picpay.com/payment-link/docs/introduction
+    // Calcular valor em centavos
     const totalCents = Math.max(1, Math.round((body.total || 0) * 100));
 
-    // PIX expira amanhã (PicPay exige data após hoje)
+    // Data de expiração: D+1 (PicPay exige data futura)
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const expiredAtDate = tomorrow.toISOString().slice(0, 10);
 
-    // Payload conforme documentação oficial
-    // - options é obrigatório
-    // - brcode_arrangements é obrigatório quando BRCODE está nos methods
+    // URL de redirecionamento após pagamento
+    const baseUrl = `https://${company.slug}.lovable.app/${company.slug}`;
+    const redirectUrl = `${baseUrl}?payment=success&pending_id=${pendingId}`;
+
+    // Payload conforme documentação oficial do PicPay Payment Link
+    // https://developers-business.picpay.com/payment-link/docs/introduction
     const createChargePayload = {
       charge: {
         name: `Pedido ${company.name}`.slice(0, 60),
-        // Inclui o pendingId completo para permitir conciliação por webhook/polling
-        // (alguns eventos não trazem merchantChargeId, então usamos regex no description)
-        description: `Pedido pendingId=${pendingId}`.slice(0, 200),
+        description: `Pedido #${pendingId.slice(0, 8)}`.slice(0, 200),
         redirect_url: redirectUrl,
         payment: {
-          methods: ["BRCODE"],
+          methods: ["BRCODE", "CREDIT_CARD"],
           brcode_arrangements: ["PIX"],
         },
         amounts: {
@@ -214,17 +203,8 @@ serve(async (req) => {
 
     console.log("[create-picpay-pix] Creating charge with payload:", JSON.stringify(createChargePayload));
 
-    // 4) Token OAuth2
-    const accessToken = await getPicPayAccessToken(
-      paymentSettings.picpay_client_id,
-      paymentSettings.picpay_client_secret
-    );
-
-    // 5) Cria cobrança no Payment Link API
-    const createUrl = `${PICPAY_PAYMENTLINK_BASE}/create`;
-    console.log(`[create-picpay-pix] Creating charge at: ${createUrl}`);
-
-    const picpayResponse = await fetch(createUrl, {
+    // Criar cobrança no PicPay
+    const picpayResponse = await fetch(PICPAY_PAYMENTLINK_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -234,11 +214,8 @@ serve(async (req) => {
       body: JSON.stringify(createChargePayload),
     });
 
-    const picpayRequestId = picpayResponse.headers.get("x-request-id") || null;
-
     const responseText = await picpayResponse.text();
     console.log(`[create-picpay-pix] PicPay response status:`, picpayResponse.status);
-    if (picpayRequestId) console.log(`[create-picpay-pix] PicPay request id:`, picpayRequestId);
     console.log(`[create-picpay-pix] PicPay response body:`, responseText);
 
     if (!picpayResponse.ok) {
@@ -248,10 +225,7 @@ serve(async (req) => {
         JSON.stringify({
           error: "Erro ao criar link de pagamento PicPay",
           status: picpayResponse.status,
-          requestId: picpayRequestId,
           details: responseText,
-          // Debug (sem segredos): permite ver exatamente o payload enviado ao PicPay
-          sentPayload: createChargePayload,
           functionVersion: FUNCTION_VERSION,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 502 }
@@ -259,12 +233,13 @@ serve(async (req) => {
     }
 
     const chargeResult = JSON.parse(responseText);
+    console.log("[create-picpay-pix] Charge result keys:", Object.keys(chargeResult));
 
-    const paymentUrl: string | undefined = chargeResult.link || chargeResult.deeplink;
-    const paymentLinkId = extractPaymentLinkId(chargeResult.link || chargeResult.deeplink);
-    const txid: string | undefined = chargeResult.txid;
-    const brcode: string | undefined = chargeResult.brcode;
-    const pixKey: string | undefined = chargeResult.pixKey;
+    // Extrair dados do resultado
+    // A API retorna: { link, id, brcode, deeplink, ... }
+    const paymentUrl = chargeResult.link || chargeResult.deeplink;
+    const paymentLinkId = chargeResult.id;
+    const brcode = chargeResult.brcode;
 
     if (!paymentLinkId) {
       console.error("[create-picpay-pix] Payment Link ID missing:", JSON.stringify(chargeResult));
@@ -279,11 +254,10 @@ serve(async (req) => {
       );
     }
 
-    // 6) Generate QR Code using external service if brcode is available
+    // Gerar QR Code se tiver brcode
     let qrCodeBase64: string | null = null;
     if (brcode) {
       try {
-        // Use QR code API service
         const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(brcode)}`;
         const qrResponse = await fetch(qrApiUrl);
         if (qrResponse.ok) {
@@ -294,41 +268,33 @@ serve(async (req) => {
         }
       } catch (qrErr) {
         console.error("[create-picpay-pix] QR code generation failed:", qrErr);
-        // Continue without QR code - user can use copy/paste or redirect
       }
     }
 
-    // 7) Salva IDs para consulta posterior
+    // Salvar IDs para consulta posterior
     await supabaseClient
       .from("pending_order_payments")
       .update({
         mercadopago_payment_id: paymentLinkId,
-        mercadopago_preference_id: txid || null,
       })
       .eq("id", pendingId);
 
-    // PIX expira em 30 minutos
+    // Expiração em 30 minutos
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
     return new Response(
       JSON.stringify({
-        // PIX screen data (like Mercado Pago)
         qrCodeBase64: qrCodeBase64 || null,
         qrCode: brcode || null,
-        pixKey: pixKey || null,
-        // Fallback to redirect if no brcode
         paymentUrl,
         pendingId,
         paymentLinkId,
-        txid,
         expiresAt,
         total: body.total,
         companyName: company.name,
         companySlug: company.slug,
         gateway: "picpay",
-        // Use embedded mode if we have brcode, otherwise redirect
         mode: brcode && qrCodeBase64 ? "embedded" : "redirect",
-        availableMethods: ["pix", "credit_card", "picpay_balance"],
         functionVersion: FUNCTION_VERSION,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }

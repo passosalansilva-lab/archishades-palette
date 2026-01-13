@@ -6,6 +6,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const FUNCTION_VERSION = "2026-01-13T21:00:00Z";
+
+// Status que indicam pagamento aprovado
+const APPROVED_STATUSES = ["PAID", "APPROVED", "COMPLETED", "SETTLED", "AUTHORIZED", "CAPTURED"];
+// Status que indicam cancelamento/expiração
+const CANCELLED_STATUSES = ["CANCELLED", "CANCELED", "REFUNDED", "EXPIRED", "REJECTED", "FAILED"];
+
+// Extrair UUID de um texto
 function extractUuidFromText(text?: string | null): string | null {
   if (!text) return null;
   const match = String(text).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
@@ -24,31 +32,13 @@ serve(async (req) => {
     );
 
     const body = await req.json();
+    console.log("[picpay-webhook] ========================================");
     console.log("[picpay-webhook] Received webhook:", JSON.stringify(body));
     console.log("[picpay-webhook] Headers:", JSON.stringify(Object.fromEntries(req.headers.entries())));
 
-    // PicPay webhook pode ter diferentes estruturas dependendo da versão da API
-    // Estrutura Payment Link API v1:
-    // - type: "PAYMENT" ou header event_type: "TransactionUpdateMessage"
-    // - data.status: "PAID" | "PENDING" | "REFUNDED" | "CANCELLED"
-    // - data.merchantChargeId: nosso pending order ID
-    // - id: PicPay's charge ID
-    // 
-    // Estrutura alternativa (E-commerce API):
-    // - referenceId: nosso pending order ID
-    // - authorizationId: PicPay payment ID
-    // - status: "paid" | "pending" | "refunded" | "cancelled"
-
-    const eventType = body.type || req.headers.get("event_type") || req.headers.get("x-event-type");
-    
-    // Aceitar diferentes tipos de eventos de pagamento
-    const paymentEventTypes = ["PAYMENT", "TransactionUpdateMessage", "payment", "charge"];
-    if (eventType && !paymentEventTypes.some(t => eventType.toLowerCase().includes(t.toLowerCase()))) {
-      console.log("[picpay-webhook] Ignoring non-payment event:", eventType);
-      return new Response(JSON.stringify({ received: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Extrair tipo de evento
+    const eventType = body.type || req.headers.get("event_type") || req.headers.get("x-event-type") || "";
+    console.log("[picpay-webhook] Event type:", eventType);
 
     // Extrair status de diferentes campos possíveis
     const chargeStatus = String(
@@ -60,8 +50,9 @@ serve(async (req) => {
       ""
     ).toUpperCase();
 
-    // Extrair ID do pedido de diferentes campos possíveis
-    // Preferimos um UUID (id do pending_order_payments) quando disponível.
+    console.log("[picpay-webhook] Charge status:", chargeStatus);
+
+    // Extrair ID do pedido pendente de diferentes campos
     const merchantChargeId =
       body.data?.merchantChargeId ||
       body.merchantChargeId ||
@@ -70,44 +61,31 @@ serve(async (req) => {
       body.externalReference ||
       body.external_reference ||
       body.data?.referenceId ||
-      body.data?.externalReference ||
       body.charge?.merchantChargeId ||
-      body.charge?.referenceId ||
-      // Payment Link API pode trazer order_number (limitado) ou description
-      extractUuidFromText(body.data?.order_number) ||
-      extractUuidFromText(body.charge?.order_number) ||
       extractUuidFromText(body.data?.description) ||
       extractUuidFromText(body.description) ||
       extractUuidFromText(body.charge?.description) ||
-      extractUuidFromText(body.payment?.description) ||
-      extractUuidFromText(body.transaction?.description) ||
       null;
 
     const picpayChargeId = 
       body.id ||
       body.chargeId ||
       body.charge_id ||
-      body.authorizationId ||
-      body.authorization_id ||
       body.data?.id ||
       body.charge?.id ||
       null;
 
-    console.log(`[picpay-webhook] Parsed data - chargeId: ${picpayChargeId}, merchantId: ${merchantChargeId}, status: ${chargeStatus}`);
+    console.log(`[picpay-webhook] merchantChargeId: ${merchantChargeId}, picpayChargeId: ${picpayChargeId}`);
 
     if (!merchantChargeId) {
       console.log("[picpay-webhook] No merchantChargeId found in webhook payload");
       console.log("[picpay-webhook] Available fields:", Object.keys(body));
-      if (body.data) console.log("[picpay-webhook] data fields:", Object.keys(body.data));
-      if (body.charge) console.log("[picpay-webhook] charge fields:", Object.keys(body.charge));
-      return new Response(JSON.stringify({ received: true, warning: "No merchantChargeId found" }), {
+      return new Response(JSON.stringify({ received: true, warning: "No merchantChargeId found", functionVersion: FUNCTION_VERSION }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[picpay-webhook] Processing charge ${picpayChargeId}, merchantId: ${merchantChargeId}, status: ${chargeStatus}`);
-
-    // Find pending order by merchantChargeId (which is the pending order ID)
+    // Buscar pedido pendente
     const { data: pendingOrder, error: pendingError } = await supabaseClient
       .from("pending_order_payments")
       .select("*")
@@ -116,44 +94,39 @@ serve(async (req) => {
 
     if (pendingError || !pendingOrder) {
       console.error("[picpay-webhook] Pending order not found:", merchantChargeId, pendingError);
-      return new Response(JSON.stringify({ received: true, error: "Order not found" }), {
+      return new Response(JSON.stringify({ received: true, error: "Order not found", functionVersion: FUNCTION_VERSION }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check if already processed
+    // Verificar se já foi processado
     if (pendingOrder.status === "completed" || pendingOrder.order_id) {
       console.log("[picpay-webhook] Order already processed:", pendingOrder.order_id);
-      return new Response(JSON.stringify({ received: true, already_processed: true }), {
+      return new Response(JSON.stringify({ received: true, already_processed: true, functionVersion: FUNCTION_VERSION }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Aceitar diferentes variações de status "pago"
-    const paidStatuses = ["PAID", "APPROVED", "COMPLETED", "SETTLED", "AUTHORIZED"];
-    const cancelledStatuses = ["CANCELLED", "CANCELED", "REFUNDED", "EXPIRED", "REJECTED"];
-
-    if (!paidStatuses.includes(chargeStatus)) {
-      console.log("[picpay-webhook] Status is not PAID, status received:", chargeStatus);
+    // Verificar status
+    if (!APPROVED_STATUSES.includes(chargeStatus)) {
+      console.log("[picpay-webhook] Status is not PAID, received:", chargeStatus);
       
-      // Update status if cancelled/refunded
-      if (cancelledStatuses.includes(chargeStatus)) {
+      // Atualizar status se cancelado
+      if (CANCELLED_STATUSES.includes(chargeStatus)) {
         await supabaseClient
           .from("pending_order_payments")
           .update({ status: "cancelled" })
           .eq("id", merchantChargeId);
       }
       
-      return new Response(JSON.stringify({ received: true, status: chargeStatus }), {
+      return new Response(JSON.stringify({ received: true, status: chargeStatus, functionVersion: FUNCTION_VERSION }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     console.log("[picpay-webhook] Payment confirmed! Creating order...");
 
-    // Mark as processing to prevent duplicates
-
-    // Mark as processing to prevent duplicates
+    // Marcar como processando para evitar duplicatas
     const { error: updateError } = await supabaseClient
       .from("pending_order_payments")
       .update({ status: "processing" })
@@ -162,18 +135,17 @@ serve(async (req) => {
 
     if (updateError) {
       console.log("[picpay-webhook] Could not mark as processing (race condition?):", updateError);
-      return new Response(JSON.stringify({ received: true }), {
+      return new Response(JSON.stringify({ received: true, functionVersion: FUNCTION_VERSION }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const orderData = pendingOrder.order_data as any;
 
-    // Find or create customer
+    // Buscar ou criar cliente
     let customerId: string | null = null;
     
     if (orderData.customer_email || orderData.customer_phone) {
-      // Try to find existing customer
       const { data: existingCustomer } = await supabaseClient
         .from("customers")
         .select("id")
@@ -184,13 +156,12 @@ serve(async (req) => {
       if (existingCustomer) {
         customerId = existingCustomer.id;
       } else {
-        // Create new customer
         const { data: newCustomer, error: customerError } = await supabaseClient
           .from("customers")
           .insert({
             name: orderData.customer_name,
             email: orderData.customer_email?.toLowerCase() || null,
-            phone: orderData.customer_phone || '',
+            phone: orderData.customer_phone || "",
           })
           .select("id")
           .single();
@@ -201,11 +172,11 @@ serve(async (req) => {
       }
     }
 
-    // Calculate estimated delivery time
+    // Calcular tempo estimado de entrega
     const estimatedDeliveryTime = new Date();
     estimatedDeliveryTime.setMinutes(estimatedDeliveryTime.getMinutes() + 45);
 
-    // Create the order
+    // Criar pedido
     const newOrderId = crypto.randomUUID();
     const isTableOrder = !!orderData.table_session_id;
     
@@ -216,11 +187,11 @@ serve(async (req) => {
         company_id: pendingOrder.company_id,
         customer_id: customerId,
         customer_name: orderData.customer_name,
-        customer_phone: orderData.customer_phone || '',
+        customer_phone: orderData.customer_phone || "",
         customer_email: orderData.customer_email?.toLowerCase() || null,
         delivery_address_id: orderData.delivery_address_id,
-        payment_method: 'pix',
-        payment_status: 'paid',
+        payment_method: "pix",
+        payment_status: "paid",
         subtotal: orderData.subtotal,
         delivery_fee: orderData.delivery_fee,
         total: orderData.total,
@@ -228,10 +199,9 @@ serve(async (req) => {
         coupon_id: orderData.coupon_id || null,
         discount_amount: orderData.discount_amount || 0,
         estimated_delivery_time: estimatedDeliveryTime.toISOString(),
-        stripe_payment_intent_id: `picpay_${picpayChargeId}`, // Store PicPay ID for reference
-        // Table order fields
+        stripe_payment_intent_id: `picpay_${picpayChargeId}`,
         table_session_id: orderData.table_session_id || null,
-        source: orderData.source || (isTableOrder ? 'table' : 'online'),
+        source: orderData.source || (isTableOrder ? "table" : "online"),
       });
 
     if (orderError) {
@@ -239,7 +209,7 @@ serve(async (req) => {
       throw orderError;
     }
 
-    // Create order items
+    // Criar itens do pedido
     const orderItems = orderData.items.map((item: any) => ({
       order_id: newOrderId,
       product_id: item.product_id,
@@ -257,15 +227,14 @@ serve(async (req) => {
 
     if (itemsError) {
       console.error("[picpay-webhook] Error creating order items:", itemsError);
-      // Don't throw - order was created
     }
 
-    // Update coupon usage if applicable
+    // Atualizar uso do cupom se aplicável
     if (orderData.coupon_id) {
-      await supabaseClient.rpc('increment_coupon_usage', { coupon_id: orderData.coupon_id });
+      await supabaseClient.rpc("increment_coupon_usage", { coupon_id: orderData.coupon_id });
     }
 
-    // Mark pending order as completed
+    // Marcar pedido pendente como completo
     await supabaseClient
       .from("pending_order_payments")
       .update({
@@ -278,14 +247,14 @@ serve(async (req) => {
     console.log("[picpay-webhook] Order created successfully:", newOrderId);
 
     return new Response(
-      JSON.stringify({ received: true, order_id: newOrderId }),
+      JSON.stringify({ received: true, order_id: newOrderId, functionVersion: FUNCTION_VERSION }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("[picpay-webhook] Error:", error);
-    // Always return 200 to prevent retries
+    // Sempre retorna 200 para evitar retries
     return new Response(
-      JSON.stringify({ received: true, error: String(error) }),
+      JSON.stringify({ received: true, error: String(error), functionVersion: FUNCTION_VERSION }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -7,16 +7,20 @@ const corsHeaders = {
 };
 
 // PicPay Payment Link API
-// Docs: https://developers-business.picpay.com/payment-link/docs/introduction
-const PICPAY_OAUTH_BASE = "https://checkout-api.picpay.com";
+const PICPAY_OAUTH_URL = "https://checkout-api.picpay.com/oauth2/token";
 const PICPAY_PAYMENTLINK_BASE = "https://api.picpay.com/v1/paymentlink";
 
+const FUNCTION_VERSION = "2026-01-13T21:00:00Z";
+
+// Status que indicam pagamento aprovado
+const APPROVED_STATUSES = ["paid", "approved", "completed", "settled", "authorized", "captured"];
+// Status que indicam cancelamento/expiração
+const CANCELLED_STATUSES = ["expired", "inactive", "cancelled", "canceled", "refunded", "rejected", "failed"];
+
 async function getPicPayAccessToken(clientId: string, clientSecret: string): Promise<string> {
-  const tokenUrl = `${PICPAY_OAUTH_BASE}/oauth2/token`;
+  console.log("[check-picpay-payment] Requesting OAuth token...");
 
-  console.log(`[check-picpay-payment] Requesting OAuth token...`);
-
-  const response = await fetch(tokenUrl, {
+  const response = await fetch(PICPAY_OAUTH_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -29,17 +33,36 @@ async function getPicPayAccessToken(clientId: string, clientSecret: string): Pro
     }),
   });
 
-  const responseText = await response.text();
-  console.log(`[check-picpay-payment] Token response status: ${response.status}`);
-
   if (!response.ok) {
-    console.error("[check-picpay-payment] Token error:", responseText);
+    const errorText = await response.text();
+    console.error("[check-picpay-payment] Token error:", errorText);
     throw new Error("Erro ao obter token de acesso do PicPay");
   }
 
-  const data = JSON.parse(responseText);
+  const data = await response.json();
   console.log("[check-picpay-payment] OAuth token obtained successfully");
   return data.access_token;
+}
+
+// Função para extrair status de diferentes estruturas de resposta
+function extractStatus(data: any): string | null {
+  const possibleFields = [
+    data?.status,
+    data?.data?.status,
+    data?.charge?.status,
+    data?.payment?.status,
+    data?.transaction?.status,
+    data?.transactions?.[0]?.status,
+    data?.payments?.[0]?.status,
+    data?.content?.status,
+  ];
+
+  for (const field of possibleFields) {
+    if (field && typeof field === "string") {
+      return field.toLowerCase();
+    }
+  }
+  return null;
 }
 
 serve(async (req) => {
@@ -64,9 +87,8 @@ serve(async (req) => {
 
     console.log("[check-picpay-payment] ========================================");
     console.log("[check-picpay-payment] Checking payment for pendingId:", pendingId);
-    console.log("[check-picpay-payment] paymentLinkId received:", paymentLinkId);
 
-    // 1) Check if order already completed
+    // 1) Verificar se o pedido já foi processado
     const { data: pendingOrder, error: pendingError } = await supabaseClient
       .from("pending_order_payments")
       .select("*")
@@ -78,8 +100,8 @@ serve(async (req) => {
     }
 
     console.log("[check-picpay-payment] Pending order status:", pendingOrder.status);
-    console.log("[check-picpay-payment] Stored mercadopago_payment_id:", pendingOrder.mercadopago_payment_id);
 
+    // Já completado
     if (pendingOrder.status === "completed" && pendingOrder.order_id) {
       console.log("[check-picpay-payment] Already completed:", pendingOrder.order_id);
       return new Response(JSON.stringify({ approved: true, orderId: pendingOrder.order_id, status: "completed" }), {
@@ -87,13 +109,14 @@ serve(async (req) => {
       });
     }
 
+    // Já cancelado
     if (pendingOrder.status === "cancelled") {
       return new Response(JSON.stringify({ approved: false, status: "cancelled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 2) Get credentials
+    // 2) Buscar credenciais
     const { data: paymentSettings, error: settingsError } = await supabaseClient
       .from("company_payment_settings")
       .select("picpay_client_id, picpay_client_secret")
@@ -108,8 +131,8 @@ serve(async (req) => {
       });
     }
 
-    // 3) Determine the Payment Link ID
-    const linkId = paymentLinkId || pendingOrder.mercadopago_payment_id || null;
+    // 3) Determinar o ID do link de pagamento
+    const linkId = paymentLinkId || pendingOrder.mercadopago_payment_id;
 
     if (!linkId) {
       console.warn("[check-picpay-payment] No paymentLinkId available!");
@@ -120,19 +143,17 @@ serve(async (req) => {
 
     console.log("[check-picpay-payment] Using linkId:", linkId);
 
-    // 4) Get OAuth token
+    // 4) Obter token OAuth
     const accessToken = await getPicPayAccessToken(
       paymentSettings.picpay_client_id,
       paymentSettings.picpay_client_secret
     );
 
-    const approvedStatuses = ["paid", "approved", "completed", "settled", "authorized"];
-    const cancelledStatuses = ["expired", "inactive", "cancelled", "canceled", "refunded"];
     let paymentStatus = "pending";
     let foundApproved = false;
 
     // ============================================================
-    // STEP A: Query GET /paymentlink/{id}
+    // PASSO A: Consultar GET /paymentlink/{id}
     // ============================================================
     const statusUrl = `${PICPAY_PAYMENTLINK_BASE}/${linkId}`;
     console.log(`[check-picpay-payment] Step A: Querying ${statusUrl}`);
@@ -152,53 +173,28 @@ serve(async (req) => {
     if (picpayResponse.ok) {
       try {
         const paymentData = JSON.parse(responseText);
-        console.log("[check-picpay-payment] Step A parsed keys:", Object.keys(paymentData));
+        const status = extractStatus(paymentData);
+        console.log("[check-picpay-payment] Step A extracted status:", status);
 
-        // Try to find status in various possible fields (a API pode variar bastante)
-        const possibleStatusFields = [
-          paymentData.status,
-          paymentData.data?.status,
-          paymentData.charge?.status,
-          paymentData.data?.charge?.status,
-          paymentData.payment?.status,
-          paymentData.data?.payment?.status,
-          paymentData.transaction?.status,
-          paymentData.data?.transaction?.status,
-          paymentData.payments?.[0]?.status,
-          paymentData.transactions?.[0]?.status,
-          paymentData.data?.payments?.[0]?.status,
-          paymentData.data?.transactions?.[0]?.status,
-        ];
-
-        console.log("[check-picpay-payment] Step A possible status fields:", possibleStatusFields);
-
-        for (const rawStatus of possibleStatusFields) {
-          if (rawStatus) {
-            const normalizedStatus = String(rawStatus).toLowerCase();
-            console.log("[check-picpay-payment] Step A checking status:", normalizedStatus);
-
-            if (approvedStatuses.includes(normalizedStatus)) {
-              paymentStatus = normalizedStatus;
-              foundApproved = true;
-              console.log("[check-picpay-payment] Step A: APPROVED!", normalizedStatus);
-              break;
-            } else if (cancelledStatuses.includes(normalizedStatus)) {
-              paymentStatus = normalizedStatus;
-              break;
-            }
+        if (status) {
+          if (APPROVED_STATUSES.includes(status)) {
+            paymentStatus = status;
+            foundApproved = true;
+            console.log("[check-picpay-payment] Step A: APPROVED!", status);
+          } else if (CANCELLED_STATUSES.includes(status)) {
+            paymentStatus = status;
+            console.log("[check-picpay-payment] Step A: CANCELLED!", status);
           }
         }
       } catch (parseErr) {
         console.error("[check-picpay-payment] Step A parse error:", parseErr);
       }
-    } else {
-      console.warn("[check-picpay-payment] Step A failed with status:", picpayResponse.status);
     }
 
     // ============================================================
-    // STEP B: If not approved, try GET /paymentlink/{id}/transactions
+    // PASSO B: Se não aprovado, consultar transações
     // ============================================================
-    if (!foundApproved && !cancelledStatuses.includes(paymentStatus)) {
+    if (!foundApproved && !CANCELLED_STATUSES.includes(paymentStatus)) {
       const txUrl = `${PICPAY_PAYMENTLINK_BASE}/${linkId}/transactions`;
       console.log(`[check-picpay-payment] Step B: Querying ${txUrl}`);
 
@@ -217,43 +213,33 @@ serve(async (req) => {
 
         if (txResp.ok) {
           const txJson = JSON.parse(txText);
+          
+          // Buscar array de transações em diferentes formatos
+          const txList = 
+            Array.isArray(txJson) ? txJson :
+            txJson.transactions ||
+            txJson.data ||
+            txJson.items ||
+            txJson.content ||
+            [];
 
-          const pickArray = (...candidates: any[]) => candidates.find(Array.isArray) ?? [];
-
-          // Transactions podem vir em formatos paginados diferentes
-          const txList = pickArray(
-            Array.isArray(txJson) ? txJson : null,
-            txJson.transactions,
-            txJson.data,
-            txJson.items,
-            txJson.content,
-            txJson.content?.items,
-            txJson.content?.data,
-            txJson.data?.transactions,
-            txJson.data?.items,
-            txJson.data?.data
-          );
           console.log("[check-picpay-payment] Step B transactions count:", Array.isArray(txList) ? txList.length : 0);
 
           if (Array.isArray(txList)) {
             for (const tx of txList) {
-              console.log("[check-picpay-payment] Step B transaction:", JSON.stringify(tx));
-              
               const txStatus = String(
-                tx.status ||
-                tx.transaction_status ||
-                tx.payment_status ||
-                tx.state ||
-                tx.situation ||
-                ""
+                tx.status || tx.transaction_status || tx.payment_status || tx.state || ""
               ).toLowerCase();
 
               console.log("[check-picpay-payment] Step B tx status:", txStatus);
 
-              if (approvedStatuses.includes(txStatus)) {
+              if (APPROVED_STATUSES.includes(txStatus)) {
                 paymentStatus = txStatus;
                 foundApproved = true;
                 console.log("[check-picpay-payment] Step B: APPROVED!", txStatus);
+                break;
+              } else if (CANCELLED_STATUSES.includes(txStatus)) {
+                paymentStatus = txStatus;
                 break;
               }
             }
@@ -268,9 +254,10 @@ serve(async (req) => {
     console.log("[check-picpay-payment] FINAL: status =", paymentStatus, ", approved =", foundApproved);
 
     // ============================================================
-    // Create order if approved
+    // Criar pedido se aprovado
     // ============================================================
     if (foundApproved) {
+      // Marcar como processando para evitar duplicatas
       const { error: updateError } = await supabaseClient
         .from("pending_order_payments")
         .update({ status: "processing" })
@@ -278,7 +265,7 @@ serve(async (req) => {
         .eq("status", "pending");
 
       if (updateError) {
-        // Check if already processed by webhook
+        // Verificar se já foi processado por webhook
         const { data: recheckOrder } = await supabaseClient
           .from("pending_order_payments")
           .select("order_id, status")
@@ -297,6 +284,7 @@ serve(async (req) => {
       const estimatedDeliveryTime = new Date();
       estimatedDeliveryTime.setMinutes(estimatedDeliveryTime.getMinutes() + 45);
 
+      // Criar pedido
       const { error: orderError } = await supabaseClient.from("orders").insert({
         id: newOrderId,
         company_id: companyId,
@@ -323,6 +311,7 @@ serve(async (req) => {
         throw new Error("Erro ao criar pedido");
       }
 
+      // Criar itens do pedido
       const orderItems = (orderData.items || []).map((item: any) => ({
         order_id: newOrderId,
         product_id: item.product_id,
@@ -338,6 +327,7 @@ serve(async (req) => {
         await supabaseClient.from("order_items").insert(orderItems);
       }
 
+      // Atualizar pedido pendente como completo
       await supabaseClient
         .from("pending_order_payments")
         .update({
@@ -354,20 +344,20 @@ serve(async (req) => {
       });
     }
 
-    // Cancelled/Expired
-    if (cancelledStatuses.includes(paymentStatus)) {
+    // Cancelado/Expirado
+    if (CANCELLED_STATUSES.includes(paymentStatus)) {
       return new Response(JSON.stringify({ approved: false, status: paymentStatus }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Still pending
-    return new Response(JSON.stringify({ approved: false, status: paymentStatus || "pending" }), {
+    // Ainda pendente
+    return new Response(JSON.stringify({ approved: false, status: paymentStatus || "pending", functionVersion: FUNCTION_VERSION }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("[check-picpay-payment] Error:", error);
-    return new Response(JSON.stringify({ error: String(error), approved: false }), {
+    return new Response(JSON.stringify({ error: String(error), approved: false, functionVersion: FUNCTION_VERSION }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
