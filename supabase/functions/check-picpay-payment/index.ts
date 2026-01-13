@@ -154,14 +154,20 @@ serve(async (req) => {
         const paymentData = JSON.parse(responseText);
         console.log("[check-picpay-payment] Step A parsed keys:", Object.keys(paymentData));
 
-        // Try to find status in various possible fields
+        // Try to find status in various possible fields (a API pode variar bastante)
         const possibleStatusFields = [
           paymentData.status,
+          paymentData.data?.status,
           paymentData.charge?.status,
+          paymentData.data?.charge?.status,
           paymentData.payment?.status,
+          paymentData.data?.payment?.status,
           paymentData.transaction?.status,
+          paymentData.data?.transaction?.status,
           paymentData.payments?.[0]?.status,
           paymentData.transactions?.[0]?.status,
+          paymentData.data?.payments?.[0]?.status,
+          paymentData.data?.transactions?.[0]?.status,
         ];
 
         console.log("[check-picpay-payment] Step A possible status fields:", possibleStatusFields);
@@ -211,16 +217,22 @@ serve(async (req) => {
 
         if (txResp.ok) {
           const txJson = JSON.parse(txText);
-          
-          // Transactions could be in different formats
-          const txList =
-            (Array.isArray(txJson) ? txJson : null) ||
-            txJson.transactions ||
-            txJson.data ||
-            txJson.items ||
-            txJson.content ||
-            [];
 
+          const pickArray = (...candidates: any[]) => candidates.find(Array.isArray) ?? [];
+
+          // Transactions podem vir em formatos paginados diferentes
+          const txList = pickArray(
+            Array.isArray(txJson) ? txJson : null,
+            txJson.transactions,
+            txJson.data,
+            txJson.items,
+            txJson.content,
+            txJson.content?.items,
+            txJson.content?.data,
+            txJson.data?.transactions,
+            txJson.data?.items,
+            txJson.data?.data
+          );
           console.log("[check-picpay-payment] Step B transactions count:", Array.isArray(txList) ? txList.length : 0);
 
           if (Array.isArray(txList)) {

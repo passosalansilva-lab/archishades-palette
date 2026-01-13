@@ -6,6 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function extractUuidFromText(text?: string | null): string | null {
+  if (!text) return null;
+  const match = String(text).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return match?.[0] ?? null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -55,7 +61,8 @@ serve(async (req) => {
     ).toUpperCase();
 
     // Extrair ID do pedido de diferentes campos possíveis
-    const merchantChargeId = 
+    // Preferimos um UUID (id do pending_order_payments) quando disponível.
+    const merchantChargeId =
       body.data?.merchantChargeId ||
       body.merchantChargeId ||
       body.referenceId ||
@@ -66,9 +73,14 @@ serve(async (req) => {
       body.data?.externalReference ||
       body.charge?.merchantChargeId ||
       body.charge?.referenceId ||
-      // Fallback: tentar extrair do order_number se for UUID-like
-      (body.data?.order_number?.length === 36 ? body.data.order_number : null) ||
-      (body.charge?.order_number?.length === 36 ? body.charge.order_number : null) ||
+      // Payment Link API pode trazer order_number (limitado) ou description
+      extractUuidFromText(body.data?.order_number) ||
+      extractUuidFromText(body.charge?.order_number) ||
+      extractUuidFromText(body.data?.description) ||
+      extractUuidFromText(body.description) ||
+      extractUuidFromText(body.charge?.description) ||
+      extractUuidFromText(body.payment?.description) ||
+      extractUuidFromText(body.transaction?.description) ||
       null;
 
     const picpayChargeId = 

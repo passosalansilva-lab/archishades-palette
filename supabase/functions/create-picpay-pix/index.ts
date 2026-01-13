@@ -194,7 +194,9 @@ serve(async (req) => {
     const createChargePayload = {
       charge: {
         name: `Pedido ${company.name}`.slice(0, 60),
-        description: `Pedido #${String(pendingId).slice(0, 8)}`,
+        // Inclui o pendingId completo para permitir conciliação por webhook/polling
+        // (alguns eventos não trazem merchantChargeId, então usamos regex no description)
+        description: `Pedido pendingId=${pendingId}`.slice(0, 200),
         redirect_url: redirectUrl,
         payment: {
           methods: ["BRCODE"],

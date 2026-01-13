@@ -125,6 +125,12 @@ export function PicPayPaymentScreen({
       }
     } catch (err) {
       console.error('[PicPayPaymentScreen] Error checking payment:', err);
+      const msg = err instanceof Error ? err.message : 'Erro ao verificar pagamento';
+      toast({
+        title: 'Falha ao verificar pagamento',
+        description: msg,
+        variant: 'destructive',
+      });
     } finally {
       setChecking(false);
     }
