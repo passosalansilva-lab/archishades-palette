@@ -138,17 +138,22 @@ const navGroups: NavGroup[] = [
       { label: "Equipe", href: "/dashboard/staff", icon: Users, roles: ["store_owner"], featureKey: "staff" },
       { label: "Avaliações", href: "/dashboard/reviews", icon: StarHalf, roles: ["store_owner", "store_staff"], permission: "can_manage_reviews", featureKey: "reviews" },
       { label: "PDV / Caixa", href: "/dashboard/pos", icon: ShoppingBag, roles: ["store_owner", "store_staff"], featureKey: "pos" },
-      { label: "Transações Online", href: "/dashboard/transactions", icon: Wallet, roles: ["store_owner"], featureKey: "transactions" },
     ],
   },
   {
-    title: "Configurações",
+    title: "Minha Conta",
     items: [
-      { label: "Planos", href: "/dashboard/plans", icon: CreditCard, roles: ["store_owner"], featureKey: "plans" },
+      { label: "Plano e Assinatura", href: "/dashboard/plans", icon: Crown, roles: ["store_owner"], featureKey: "plans" },
+      { label: "Pagamentos", href: "/dashboard/transactions", icon: Wallet, roles: ["store_owner"], featureKey: "transactions" },
+      { label: "Meu Perfil", href: "/dashboard/settings", icon: UserCog, roles: ["super_admin", "store_owner", "delivery_driver", "store_staff"], featureKey: "settings" },
+    ],
+  },
+  {
+    title: "Sistema",
+    items: [
       { label: "Notificações", href: "/dashboard/notifications", icon: Bell, roles: ["super_admin", "store_owner", "store_staff"], featureKey: "notifications" },
       { label: "Sons e Alertas", href: "/dashboard/notifications/sounds", icon: Volume2, roles: ["store_owner"], featureKey: "notification_sounds" },
       { label: "Logs de Atividade", href: "/dashboard/logs", icon: History, roles: ["store_owner"], featureKey: "activity_logs" },
-      { label: "Configurações", href: "/dashboard/settings", icon: Settings, roles: ["super_admin", "store_owner", "delivery_driver", "store_staff"], featureKey: "settings" },
     ],
   },
   {
