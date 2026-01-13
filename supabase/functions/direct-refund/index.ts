@@ -220,9 +220,10 @@ serve(async (req) => {
     }
 
     // Get order and verify ownership
+    // Note: The orders table uses stripe_payment_intent_id for all payment IDs (MP, PicPay, etc.)
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, company_id, total, payment_status, payment_method, stripe_payment_intent_id, mercadopago_payment_id, customer_name")
+      .select("id, company_id, total, payment_status, payment_method, stripe_payment_intent_id, customer_name")
       .eq("id", order_id)
       .single();
 
@@ -279,8 +280,8 @@ serve(async (req) => {
       );
     }
 
-    // Determine payment provider and ID
-    const paymentId = order.stripe_payment_intent_id || order.mercadopago_payment_id;
+    // Determine payment provider and ID (stored in stripe_payment_intent_id for all providers)
+    const paymentId = order.stripe_payment_intent_id;
     if (!paymentId) {
       return new Response(
         JSON.stringify({ error: "ID do pagamento não encontrado" }),
