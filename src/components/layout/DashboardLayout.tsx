@@ -33,6 +33,7 @@ import {
   History,
   CreditCard,
   QrCode,
+  Wallet,
   Volume2,
   UserCog,
   ChefHat,
@@ -135,8 +136,7 @@ const navGroups: NavGroup[] = [
       { label: "Equipe", href: "/dashboard/staff", icon: Users, roles: ["store_owner"], featureKey: "staff" },
       { label: "Avaliações", href: "/dashboard/reviews", icon: StarHalf, roles: ["store_owner", "store_staff"], permission: "can_manage_reviews", featureKey: "reviews" },
       { label: "PDV / Caixa", href: "/dashboard/pos", icon: ShoppingBag, roles: ["store_owner", "store_staff"], featureKey: "pos" },
-      { label: "Transações Cartão", href: "/dashboard/card-transactions", icon: CreditCard, roles: ["store_owner"], featureKey: "card_transactions" },
-      { label: "Transações PIX", href: "/dashboard/pix-transactions", icon: QrCode, roles: ["store_owner"], featureKey: "pix_transactions" },
+      { label: "Transações Online", href: "/dashboard/transactions", icon: Wallet, roles: ["store_owner"], featureKey: "transactions" },
     ],
   },
   {

@@ -47,6 +47,7 @@ import CustomerReferrals from "./pages/store/CustomerReferrals";
 import LotteryManagement from "./pages/store/LotteryManagement";
 import CardTransactions from "./pages/store/CardTransactions";
 import PixTransactions from "./pages/store/PixTransactions";
+import PaymentTransactions from "./pages/store/PaymentTransactions";
 import AdminCardTransactions from "./pages/admin/AdminCardTransactions";
 import MyOrders from "./pages/MyOrders";
 import OrderTracking from "./pages/OrderTracking";
@@ -300,6 +301,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <PixTransactions />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/transactions"
+                element={
+                  <ProtectedRoute>
+                    <PaymentTransactions />
                   </ProtectedRoute>
                 }
               />
