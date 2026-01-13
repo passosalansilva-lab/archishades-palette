@@ -923,8 +923,8 @@ export default function EmailTemplates() {
 
       {/* Editor Dialog */}
       <Dialog open={!!editingTemplate} onOpenChange={(open) => !open && setEditingTemplate(null)}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-6xl h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
               Editar Template: {editingTemplate?.name}
@@ -934,114 +934,116 @@ export default function EmailTemplates() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <div className="grid grid-cols-2 gap-4 h-full">
               {/* Left: Editor */}
-              <div className="space-y-4 overflow-auto pr-2">
-                <div>
-                  <Label htmlFor="subject">Assunto do Email</Label>
-                  <Input
-                    id="subject"
-                    value={editedSubject}
-                    onChange={(e) => setEditedSubject(e.target.value)}
-                    placeholder="Assunto do email"
-                    className="mt-1.5"
-                  />
-                </div>
+              <ScrollArea className="h-full pr-4">
+                <div className="space-y-4 pb-4">
+                  <div>
+                    <Label htmlFor="subject">Assunto do Email</Label>
+                    <Input
+                      id="subject"
+                      value={editedSubject}
+                      onChange={(e) => setEditedSubject(e.target.value)}
+                      placeholder="Assunto do email"
+                      className="mt-1.5"
+                    />
+                  </div>
 
-                <div>
-                  <Label>Variáveis Disponíveis</Label>
-                  <div className="mt-1.5 space-y-2">
-                    {editedVariables.map((v, index) => (
-                      <div key={index} className="flex gap-2 items-start p-2 bg-muted rounded-lg">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex gap-2">
-                            <Input
-                              value={v.key}
-                              onChange={(e) => handleUpdateVariable(index, "key", e.target.value)}
-                              placeholder="{{variavel}}"
-                              className="font-mono text-sm h-8"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copyToClipboard(v.key)}
-                              className="h-8 px-2"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
+                  <div>
+                    <Label>Variáveis Disponíveis</Label>
+                    <div className="mt-1.5 space-y-2">
+                      {editedVariables.map((v, index) => (
+                        <div key={index} className="flex gap-2 items-start p-2 bg-muted rounded-lg">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex gap-2">
+                              <Input
+                                value={v.key}
+                                onChange={(e) => handleUpdateVariable(index, "key", e.target.value)}
+                                placeholder="{{variavel}}"
+                                className="font-mono text-sm h-8"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(v.key)}
+                                className="h-8 px-2"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                value={v.description}
+                                onChange={(e) => handleUpdateVariable(index, "description", e.target.value)}
+                                placeholder="Descrição"
+                                className="h-8 text-sm"
+                              />
+                              <Input
+                                value={v.example}
+                                onChange={(e) => handleUpdateVariable(index, "example", e.target.value)}
+                                placeholder="Exemplo"
+                                className="h-8 text-sm"
+                              />
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              value={v.description}
-                              onChange={(e) => handleUpdateVariable(index, "description", e.target.value)}
-                              placeholder="Descrição"
-                              className="h-8 text-sm"
-                            />
-                            <Input
-                              value={v.example}
-                              onChange={(e) => handleUpdateVariable(index, "example", e.target.value)}
-                              placeholder="Exemplo"
-                              className="h-8 text-sm"
-                            />
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveVariable(index)}
+                            className="h-8 px-2 text-destructive hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveVariable(index)}
-                          className="h-8 px-2 text-destructive hover:text-destructive"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button variant="outline" size="sm" onClick={handleAddVariable}>
-                      <Plus className="h-3 w-3 mr-1" />
-                      Adicionar Variável
-                    </Button>
+                      ))}
+                      <Button variant="outline" size="sm" onClick={handleAddVariable}>
+                        <Plus className="h-3 w-3 mr-1" />
+                        Adicionar Variável
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Label>Código HTML</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowPreview(!showPreview)}
-                    >
-                      {showPreview ? <Code className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
-                      {showPreview ? "Editor" : "Preview"}
-                    </Button>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <Label>Código HTML</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowPreview(!showPreview)}
+                      >
+                        {showPreview ? <Code className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                        {showPreview ? "Editor" : "Preview"}
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={editedHtml}
+                      onChange={(e) => setEditedHtml(e.target.value)}
+                      className="font-mono text-sm h-[400px] resize-y"
+                      placeholder="<!DOCTYPE html>..."
+                    />
                   </div>
-                  <Textarea
-                    value={editedHtml}
-                    onChange={(e) => setEditedHtml(e.target.value)}
-                    className="font-mono text-sm min-h-[300px] resize-none"
-                    placeholder="<!DOCTYPE html>..."
-                  />
                 </div>
-              </div>
+              </ScrollArea>
 
               {/* Right: Preview */}
-              <div className="border rounded-lg overflow-hidden bg-muted/30">
-                <div className="bg-muted px-4 py-2 border-b flex items-center gap-2">
+              <div className="border rounded-lg overflow-hidden bg-muted/30 flex flex-col h-full">
+                <div className="bg-muted px-4 py-2 border-b flex items-center gap-2 flex-shrink-0">
                   <Eye className="h-4 w-4" />
                   <span className="text-sm font-medium">Preview</span>
                 </div>
-                <ScrollArea className="h-[500px]">
+                <div className="flex-1 min-h-0">
                   <iframe
                     srcDoc={getPreviewHtml()}
-                    className="w-full h-full min-h-[500px] bg-white"
+                    className="w-full h-full bg-white"
                     title="Email Preview"
                   />
-                </ScrollArea>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
+          <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
             <Button variant="outline" onClick={() => setEditingTemplate(null)}>
               Cancelar
             </Button>
