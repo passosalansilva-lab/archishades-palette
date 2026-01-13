@@ -135,10 +135,33 @@ export default function ResetPassword() {
         body: { email },
       });
 
-      if (error || response?.error) {
+      if (error) {
+        let errorMessage = 'Tente novamente';
+        if (error.context?.body) {
+          try {
+            const errorBody = typeof error.context.body === 'string' 
+              ? JSON.parse(error.context.body) 
+              : error.context.body;
+            errorMessage = errorBody?.error || errorMessage;
+          } catch {
+            errorMessage = error.message || errorMessage;
+          }
+        } else {
+          errorMessage = error.message || errorMessage;
+        }
+        
         toast({
           title: 'Erro ao reenviar código',
-          description: response?.error || error?.message || 'Tente novamente',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (response?.error) {
+        toast({
+          title: 'Erro ao reenviar código',
+          description: response.error,
           variant: 'destructive',
         });
         return;
@@ -171,10 +194,33 @@ export default function ResetPassword() {
         body: { email, code: verificationCode },
       });
 
-      if (error || response?.error) {
+      if (error) {
+        let errorMessage = 'Verifique o código e tente novamente';
+        if (error.context?.body) {
+          try {
+            const errorBody = typeof error.context.body === 'string' 
+              ? JSON.parse(error.context.body) 
+              : error.context.body;
+            errorMessage = errorBody?.error || errorMessage;
+          } catch {
+            errorMessage = error.message || errorMessage;
+          }
+        } else {
+          errorMessage = error.message || errorMessage;
+        }
+        
         toast({
           title: 'Código inválido',
-          description: response?.error || 'Verifique o código e tente novamente',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (response?.error) {
+        toast({
+          title: 'Código inválido',
+          description: response.error,
           variant: 'destructive',
         });
         return;
@@ -203,10 +249,33 @@ export default function ResetPassword() {
         },
       });
 
-      if (error || response?.error) {
+      if (error) {
+        let errorMessage = 'Tente novamente';
+        if (error.context?.body) {
+          try {
+            const errorBody = typeof error.context.body === 'string' 
+              ? JSON.parse(error.context.body) 
+              : error.context.body;
+            errorMessage = errorBody?.error || errorMessage;
+          } catch {
+            errorMessage = error.message || errorMessage;
+          }
+        } else {
+          errorMessage = error.message || errorMessage;
+        }
+        
         toast({
           title: 'Erro ao redefinir senha',
-          description: response?.error || error?.message || 'Tente novamente',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (response?.error) {
+        toast({
+          title: 'Erro ao redefinir senha',
+          description: response.error,
           variant: 'destructive',
         });
         return;
