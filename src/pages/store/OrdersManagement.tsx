@@ -51,6 +51,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionAlert } from '@/components/SubscriptionAlert';
 import { PrintReceipt } from '@/components/orders/PrintReceipt';
 import { CancelOrderDialog } from '@/components/orders/CancelOrderDialog';
+import { OrderRefundHistory } from '@/components/orders/OrderRefundHistory';
 import { Database } from '@/integrations/supabase/types';
 import { formatDistanceToNow, startOfDay, startOfWeek, startOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -2011,6 +2012,9 @@ export default function OrdersManagement() {
                   </div>
                 </div>
               )}
+
+              {/* Refund History */}
+              <OrderRefundHistory orderId={selectedOrder.id} />
             </div>
           )}
         </DialogContent>
