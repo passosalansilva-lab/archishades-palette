@@ -201,9 +201,10 @@ serve(async (req) => {
     const productCents = Math.max(0, Math.round((body.subtotal || 0) * 100));
     const deliveryCents = Math.max(0, Math.round((body.deliveryFee || 0) * 100));
 
-    const expiredAtDate = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    // PIX expira em 30 minutos
+    const expiredAtDate = new Date(Date.now() + 30 * 60 * 1000)
       .toISOString()
-      .slice(0, 10); // YYYY-MM-DD
+      .slice(0, 10); // YYYY-MM-DD (PicPay só aceita data, não hora)
 
     const createChargePayload = {
       charge: {
@@ -311,8 +312,8 @@ serve(async (req) => {
       })
       .eq("id", pendingId);
 
-    // Calculate expiration (24 hours from now)
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    // PIX expira em 30 minutos
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
     return new Response(
       JSON.stringify({
