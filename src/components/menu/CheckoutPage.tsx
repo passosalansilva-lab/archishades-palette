@@ -1153,8 +1153,17 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
                   const body = await response.error.context.json();
                   const base = body?.error || body?.message;
                   const extra = body?.details || body?.detail;
+                  const functionVersion = body?.functionVersion;
+                  const sentPayload = body?.sentPayload;
+
                   // Prefer mostrar o motivo real vindo do backend (ex: validação do PicPay)
                   details = extra ? `${base || 'Erro'}: ${extra}` : (base || JSON.stringify(body));
+
+                  if (functionVersion) details += ` | v=${functionVersion}`;
+                  if (sentPayload) {
+                    const payloadText = JSON.stringify(sentPayload);
+                    details += ` | payload=${payloadText.slice(0, 800)}${payloadText.length > 800 ? '…' : ''}`;
+                  }
                 } catch {
                   try {
                     details = await response.error.context.text();
