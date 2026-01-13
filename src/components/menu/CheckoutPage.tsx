@@ -1151,7 +1151,10 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
               if (response.error instanceof FunctionsHttpError) {
                 try {
                   const body = await response.error.context.json();
-                  details = body?.error || body?.message || JSON.stringify(body);
+                  const base = body?.error || body?.message;
+                  const extra = body?.details || body?.detail;
+                  // Prefer mostrar o motivo real vindo do backend (ex: validação do PicPay)
+                  details = extra ? `${base || 'Erro'}: ${extra}` : (base || JSON.stringify(body));
                 } catch {
                   try {
                     details = await response.error.context.text();
