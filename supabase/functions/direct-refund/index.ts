@@ -219,16 +219,42 @@ serve(async (req) => {
       );
     }
 
-    // Get order and verify ownership
+    // Get order (service role bypasses RLS, but we still enforce ownership checks below)
     // Note: The orders table uses stripe_payment_intent_id for all payment IDs (MP, PicPay, etc.)
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, company_id, total, payment_status, payment_method, stripe_payment_intent_id, customer_name")
+      .select(
+        "id, company_id, total, payment_status, payment_method, stripe_payment_intent_id, customer_name"
+      )
       .eq("id", order_id)
-      .single();
+      .maybeSingle();
 
-    if (orderError || !order) {
-      console.error("[direct-refund] Order not found:", orderError);
+    if (orderError) {
+      console.error("[direct-refund] Error loading order:", { order_id, orderError });
+
+      const origin = req.headers.get("origin") ?? "";
+      const debug = req.headers.get("x-debug") === "1" || origin.includes("lovableproject.com");
+
+      return new Response(
+        JSON.stringify({
+          error: "Erro ao buscar pedido",
+          ...(debug
+            ? {
+                debug: {
+                  code: (orderError as any).code,
+                  message: (orderError as any).message,
+                  details: (orderError as any).details,
+                  hint: (orderError as any).hint,
+                },
+              }
+            : {}),
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!order) {
+      console.warn("[direct-refund] Order not found:", { order_id });
       return new Response(
         JSON.stringify({ error: "Pedido não encontrado" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
