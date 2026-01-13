@@ -24,19 +24,21 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, password, fullName, phone, companyName, cnpj }: CreateUserRequest = await req.json();
+    const { email: rawEmail, password, fullName, phone, companyName, cnpj }: CreateUserRequest = await req.json();
 
     // Validação obrigatória de email
-    if (!email || !email.trim()) {
+    if (!rawEmail || !rawEmail.trim()) {
       return new Response(
         JSON.stringify({ error: "Email é obrigatório para criar uma conta" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
+    const email = rawEmail.trim().toLowerCase();
+
     // Validar formato do email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
+    if (!emailRegex.test(email)) {
       return new Response(
         JSON.stringify({ error: "Formato de email inválido" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -59,7 +61,7 @@ const handler = async (req: Request): Promise<Response> => {
     const { data: existingEmailCompany, error: emailCheckError } = await supabase
       .from("companies")
       .select("id")
-      .eq("email", email.trim())
+      .eq("email", email)
       .maybeSingle();
 
     if (emailCheckError) {

@@ -20,15 +20,16 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, code }: VerifyCodeRequest = await req.json();
+    const { email: rawEmail, code }: VerifyCodeRequest = await req.json();
 
-    if (!email || !code) {
+    if (!rawEmail || !code) {
       return new Response(
         JSON.stringify({ error: "Email e código são obrigatórios" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
+    const email = rawEmail.trim().toLowerCase();
     console.log(`Verifying code for: ${email}`);
 
     // Create Supabase client with service role
