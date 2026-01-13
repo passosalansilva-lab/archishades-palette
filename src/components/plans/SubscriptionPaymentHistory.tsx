@@ -145,6 +145,15 @@ export function SubscriptionPaymentHistory({ companyId }: SubscriptionPaymentHis
   const handleSubmitRefundRequest = async () => {
     if (!selectedPayment || !refundReason.trim()) return;
 
+    if (!user?.id) {
+      toast({
+        title: 'Sessão expirada',
+        description: 'Faça login novamente para solicitar estorno.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       // Criar solicitação de estorno na tabela refund_requests
@@ -155,7 +164,7 @@ export function SubscriptionPaymentHistory({ companyId }: SubscriptionPaymentHis
           payment_id: selectedPayment.payment_reference,
           original_amount: selectedPayment.amount,
           requested_amount: selectedPayment.amount,
-          requested_by: user?.id,
+          requested_by: user.id,
           reason: refundReason.trim(),
           payment_method: selectedPayment.payment_method,
           // Campos específicos para identificar como estorno de assinatura

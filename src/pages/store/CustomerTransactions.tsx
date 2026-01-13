@@ -373,6 +373,15 @@ export default function CustomerTransactions() {
       return;
     }
 
+    if (!user?.id) {
+      toast({
+        title: 'Sessão expirada',
+        description: 'Faça login novamente para solicitar estorno.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSubmittingRefund(true);
     try {
       // Determinar o provider baseado no payment_intent
@@ -389,6 +398,7 @@ export default function CustomerTransactions() {
           order_id: selectedTransaction.id,
           original_amount: selectedTransaction.total,
           requested_amount: selectedTransaction.total,
+          requested_by: user?.id,
           reason: refundReason.trim(),
           customer_name: selectedTransaction.customer_name,
           payment_method: selectedTransaction.payment_method === 'pix' ? 'pix' : 'card',
