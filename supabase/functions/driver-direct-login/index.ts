@@ -76,7 +76,7 @@ serve(async (req) => {
     // Busca o entregador ativo com o email informado
     let driverQuery = supabaseAdmin
       .from("delivery_drivers")
-      .select("id, email, driver_name, is_active, user_id, company_id")
+      .select("id, email, driver_name, is_active, user_id, company_id, auth_password")
       .eq("email", normalizedEmail)
       .eq("is_active", true);
 
@@ -116,106 +116,118 @@ serve(async (req) => {
       );
     }
 
-    logStep("Driver found", { driverId: driver.id, hasUserId: !!driver.user_id });
+    logStep("Driver found", { driverId: driver.id, hasUserId: !!driver.user_id, hasAuthPassword: !!driver.auth_password });
 
     let userId = driver.user_id;
+    let authPassword = driver.auth_password;
 
-    // Se não tiver user_id vinculado, cria o usuário no auth
-    if (!userId) {
-      logStep("Creating auth user for driver");
+    // Se não tiver user_id ou senha, cria/configura o usuário no auth
+    if (!userId || !authPassword) {
+      logStep("Setting up auth for driver");
 
-      const randomPassword = crypto.randomUUID() + crypto.randomUUID();
+      // Gera senha aleatória segura
+      const newPassword = crypto.randomUUID() + crypto.randomUUID();
 
-      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: normalizedEmail,
-        password: randomPassword,
-        email_confirm: true,
-        user_metadata: { full_name: driver.driver_name || "Entregador" },
-      });
+      if (!userId) {
+        // Cria novo usuário
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: normalizedEmail,
+          password: newPassword,
+          email_confirm: true,
+          user_metadata: { full_name: driver.driver_name || "Entregador" },
+        });
 
-      if (authError) {
-        if (authError.message.includes("already been registered")) {
-          logStep("User already exists, fetching from auth");
-          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-          const existingUser = existingUsers?.users?.find((u: any) => u.email === normalizedEmail);
-          if (existingUser) {
-            userId = existingUser.id;
+        if (authError) {
+          if (authError.message.includes("already been registered")) {
+            logStep("User already exists, fetching and updating password");
+            const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+            const existingUser = existingUsers?.users?.find((u: any) => u.email === normalizedEmail);
+            if (existingUser) {
+              userId = existingUser.id;
+              // Atualiza a senha do usuário existente
+              await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
+            } else {
+              throw authError;
+            }
           } else {
             throw authError;
           }
-        } else {
-          throw authError;
+        } else if (authData?.user) {
+          userId = authData.user.id;
         }
-      } else if (authData?.user) {
-        userId = authData.user.id;
+
+        // Adiciona role de delivery_driver
+        await supabaseAdmin
+          .from("user_roles")
+          .upsert({ user_id: userId, role: "delivery_driver" }, { onConflict: "user_id,role" });
+      } else {
+        // Já tem userId mas não tem senha - atualiza a senha
+        await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
       }
 
-      // Vincula o user_id ao entregador
-      const { error: linkError } = await supabaseAdmin
+      authPassword = newPassword;
+
+      // Salva user_id e senha no driver
+      const { error: updateError } = await supabaseAdmin
         .from("delivery_drivers")
-        .update({ user_id: userId })
+        .update({ user_id: userId, auth_password: authPassword })
         .eq("id", driver.id);
 
-      if (linkError) {
-        logStep("Error linking user_id to driver", { error: linkError.message });
-        // Não falha a função por isso, só loga
+      if (updateError) {
+        logStep("Error updating driver credentials", { error: updateError.message });
       }
 
-      // Adiciona role de delivery_driver
-      const { error: roleError } = await supabaseAdmin
-        .from("user_roles")
-        .upsert({ user_id: userId, role: "delivery_driver" }, { onConflict: "user_id,role" });
-
-      if (roleError) {
-        logStep("Error adding driver role", { error: roleError.message });
-      }
-
-      logStep("Auth user created and linked", { userId });
+      logStep("Auth setup complete", { userId });
     }
 
-    // === LOGIN DIRETO - Gera magic link e extrai o token para criar sessão ===
-    logStep("Generating magic link to extract token");
+    // === LOGIN DIRETO com email/senha ===
+    logStep("Signing in with password");
 
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "magiclink",
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
       email: normalizedEmail,
-    });
-
-    if (linkError || !linkData?.properties?.hashed_token) {
-      logStep("generateLink failed", { message: linkError?.message });
-      return new Response(
-        JSON.stringify({ error: "Não foi possível gerar link de login. Tente novamente." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Extrai o token do link gerado
-    const actionLink = linkData.properties.action_link;
-    const urlObj = new URL(actionLink);
-    const token = urlObj.searchParams.get("token");
-    const tokenType = urlObj.searchParams.get("type") || "magiclink";
-
-    if (!token) {
-      logStep("Token not found in action_link", { actionLink });
-      return new Response(
-        JSON.stringify({ error: "Falha ao extrair token de login" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    logStep("Token extracted, verifying OTP to create session");
-
-    // Usa o token para criar uma sessão válida
-    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.verifyOtp({
-      token_hash: linkData.properties.hashed_token,
-      type: "magiclink",
+      password: authPassword,
     });
 
     if (sessionError || !sessionData?.session) {
-      logStep("verifyOtp failed", { message: sessionError?.message });
+      logStep("signInWithPassword failed", { message: sessionError?.message });
+      
+      // Se falhou, pode ser que a senha mudou - tenta resetar
+      const resetPassword = crypto.randomUUID() + crypto.randomUUID();
+      await supabaseAdmin.auth.admin.updateUserById(userId, { password: resetPassword });
+      await supabaseAdmin.from("delivery_drivers").update({ auth_password: resetPassword }).eq("id", driver.id);
+      
+      // Tenta login novamente
+      const { data: retryData, error: retryError } = await supabaseAdmin.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: resetPassword,
+      });
+      
+      if (retryError || !retryData?.session) {
+        logStep("Retry signInWithPassword also failed", { message: retryError?.message });
+        return new Response(
+          JSON.stringify({ error: "Falha ao criar sessão. Tente novamente." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      logStep("Session created on retry", { userId: retryData.user?.id });
+      
       return new Response(
-        JSON.stringify({ error: "Falha ao criar sessão de login. Tente novamente." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          session: {
+            access_token: retryData.session.access_token,
+            refresh_token: retryData.session.refresh_token,
+            expires_in: retryData.session.expires_in,
+            expires_at: retryData.session.expires_at,
+          },
+          user: retryData.user,
+          companyId: driver.company_id,
+          driverName: driver.driver_name,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
