@@ -245,3 +245,6 @@ verify_jwt = false
 
 [functions.direct-refund]
 verify_jwt = false
+
+[functions.assign-driver]
+verify_jwt = false
