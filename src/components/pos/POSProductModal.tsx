@@ -5,8 +5,6 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -385,21 +383,34 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col" aria-describedby={undefined}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between pr-6">
-            <span className="truncate">{product.name}</span>
+      <DialogContent 
+        className="sm:max-w-lg w-[95vw] max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0" 
+        aria-describedby={undefined}
+      >
+        {/* Header compacto */}
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+          <div className="flex-1 min-w-0 pr-4">
+            <h2 className="font-semibold text-base truncate">{product.name}</h2>
             {!isAcaiProduct && (
-              <span className="text-primary font-bold">{formatCurrency(product.price)}</span>
+              <p className="text-primary font-bold text-sm">{formatCurrency(product.price)}</p>
             )}
-          </DialogTitle>
-        </DialogHeader>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full flex-shrink-0"
+            onClick={handleClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-4 pb-4">
-            {/* Imagem do produto */}
+        {/* Conteúdo scrollável */}
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-4 space-y-4">
+            {/* Imagem do produto - mais compacta */}
             {product.image_url && (
-              <div className="relative w-full h-32 rounded-lg overflow-hidden bg-muted">
+              <div className="relative w-full h-28 rounded-lg overflow-hidden bg-muted">
                 <img
                   src={product.image_url}
                   alt={product.name}
@@ -413,38 +424,38 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
             )}
 
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : hasVisibleOptions ? (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {visibleOptionGroups.map((group) => (
-                  <div key={group.id} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-sm">{group.name}</h4>
+                  <div key={group.id} className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-medium text-sm truncate">{group.name}</h4>
                         {group.description && (
-                          <p className="text-xs text-muted-foreground">{group.description}</p>
+                          <p className="text-xs text-muted-foreground truncate">{group.description}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         {group.is_required && (
-                          <Badge variant="destructive" className="text-xs">Obrigatório</Badge>
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Obrigatório</Badge>
                         )}
                         {group.selection_type === 'multiple' && group.max_selections > 1 && (
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                             {getGroupSelectionCount(group.id)}/{group.max_selections}
                           </Badge>
                         )}
                         {group.free_quantity_limit > 0 && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                             {group.free_quantity_limit} grátis
                           </Badge>
                         )}
                       </div>
                     </div>
 
-                    {/* Single Selection */}
+                    {/* Single Selection - mais compacto */}
                     {group.selection_type === 'single' && (
                       <RadioGroup
                         value={selectedOptions.find((o) => o.groupId === group.id)?.optionId || ''}
@@ -452,22 +463,22 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                           const option = group.options.find((o) => o.id === value);
                           if (option) handleSingleSelect(group, option);
                         }}
-                        className="space-y-2"
+                        className="space-y-1.5"
                       >
                         {group.options.map((option) => (
                           <div
                             key={option.id}
                             onClick={() => handleSingleSelect(group, option)}
-                            className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-colors"
+                            className="flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-colors"
                           >
-                            <div className="flex items-center gap-3">
-                              <RadioGroupItem value={option.id} id={`pos-${option.id}`} />
-                              <Label htmlFor={`pos-${option.id}`} className="cursor-pointer">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <RadioGroupItem value={option.id} id={`pos-${option.id}`} className="flex-shrink-0" />
+                              <Label htmlFor={`pos-${option.id}`} className="cursor-pointer text-sm truncate">
                                 {option.name}
                               </Label>
                             </div>
                             {option.price_modifier !== 0 && (
-                              <span className={`text-sm font-medium ${option.price_modifier > 0 ? 'text-primary' : 'text-green-600'}`}>
+                              <span className={`text-xs font-medium flex-shrink-0 ${option.price_modifier > 0 ? 'text-primary' : 'text-green-600'}`}>
                                 {option.price_modifier > 0 ? '+' : ''}{formatCurrency(option.price_modifier)}
                               </span>
                             )}
@@ -476,9 +487,9 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                       </RadioGroup>
                     )}
 
-                    {/* Multiple Selection */}
+                    {/* Multiple Selection - mais compacto */}
                     {group.selection_type === 'multiple' && (
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {group.options.map((option) => {
                           const isSelected = selectedOptions.some((o) => o.optionId === option.id);
                           const currentCount = getGroupSelectionCount(group.id);
@@ -488,7 +499,7 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                             <div
                               key={option.id}
                               onClick={() => !maxReached && handleMultipleToggle(group, option)}
-                              className={`flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer ${
+                              className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-colors cursor-pointer ${
                                 isSelected
                                   ? 'border-primary bg-primary/5'
                                   : maxReached
@@ -496,16 +507,17 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                                   : 'border-border hover:border-primary/30'
                               }`}
                             >
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <Checkbox
                                   checked={isSelected}
                                   disabled={maxReached}
                                   onCheckedChange={() => handleMultipleToggle(group, option)}
+                                  className="flex-shrink-0"
                                 />
-                                <span>{option.name}</span>
+                                <span className="text-sm truncate">{option.name}</span>
                               </div>
                               {option.price_modifier !== 0 && (
-                                <span className={`text-sm font-medium ${option.price_modifier > 0 ? 'text-primary' : 'text-green-600'}`}>
+                                <span className={`text-xs font-medium flex-shrink-0 ${option.price_modifier > 0 ? 'text-primary' : 'text-green-600'}`}>
                                   {option.price_modifier > 0 ? '+' : ''}{formatCurrency(option.price_modifier)}
                                 </span>
                               )}
@@ -518,39 +530,42 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
+              <p className="text-sm text-muted-foreground text-center py-3">
                 Este produto não possui adicionais
               </p>
             )}
 
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label className="text-sm">Observações</Label>
+            {/* Notes - mais compacto */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Observações</Label>
               <Textarea
                 placeholder="Ex: sem cebola, bem passado..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
+                className="resize-none text-sm min-h-[56px]"
               />
             </div>
           </div>
         </ScrollArea>
 
-        {/* Footer */}
-        <div className="border-t pt-4 space-y-4">
+        {/* Footer fixo e compacto */}
+        <div className="border-t bg-background p-3 space-y-3">
           {/* Quantity */}
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-3">
             <Button
               variant="outline"
               size="icon"
+              className="h-9 w-9"
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
             >
               <Minus className="h-4 w-4" />
             </Button>
-            <span className="text-xl font-bold w-12 text-center">{quantity}</span>
+            <span className="text-lg font-bold w-10 text-center">{quantity}</span>
             <Button
               variant="outline"
               size="icon"
+              className="h-9 w-9"
               onClick={() => setQuantity(quantity + 1)}
             >
               <Plus className="h-4 w-4" />
@@ -559,8 +574,7 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
 
           {/* Add button */}
           <Button
-            className="w-full"
-            size="lg"
+            className="w-full h-11 text-sm font-semibold"
             onClick={handleAddToCart}
             disabled={!canAddToCart}
           >
