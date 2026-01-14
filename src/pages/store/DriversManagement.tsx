@@ -27,6 +27,8 @@ import {
   QrCode,
   RefreshCw,
   MessageCircle,
+  Timer,
+  TrendingUp,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { FeatureGate } from '@/components/layout/FeatureGate';
@@ -110,6 +112,18 @@ interface Driver {
   access_token?: string;
 }
 
+interface DriverDelivery {
+  id: string;
+  driver_id: string;
+  created_at: string;
+  delivered_at: string;
+}
+
+interface DriverMetrics {
+  avgTimeBetweenDeliveries: number | null; // in minutes
+  totalDeliveriesToday: number;
+}
+
 interface Order {
   id: string;
   created_at: string;
@@ -147,6 +161,7 @@ export default function DriversManagement() {
   const [companySlug, setCompanySlug] = useState<string>('');
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [driverMetrics, setDriverMetrics] = useState<Record<string, DriverMetrics>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('drivers');
 
@@ -262,6 +277,71 @@ export default function DriversManagement() {
 
       if (ordersError) throw ordersError;
       setOrders(ordersData || []);
+
+      // Load driver deliveries for metrics calculation
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { data: deliveriesData } = await supabase
+        .from('driver_deliveries')
+        .select('id, driver_id, created_at, delivered_at')
+        .eq('company_id', company.id)
+        .gte('delivered_at', today.toISOString())
+        .order('delivered_at', { ascending: true });
+
+      // Calculate metrics per driver
+      const metrics: Record<string, DriverMetrics> = {};
+      
+      if (deliveriesData && deliveriesData.length > 0) {
+        // Group deliveries by driver
+        const deliveriesByDriver: Record<string, DriverDelivery[]> = {};
+        deliveriesData.forEach((d) => {
+          if (!deliveriesByDriver[d.driver_id]) {
+            deliveriesByDriver[d.driver_id] = [];
+          }
+          deliveriesByDriver[d.driver_id].push(d);
+        });
+
+        // Calculate average time between deliveries for each driver
+        Object.entries(deliveriesByDriver).forEach(([driverId, deliveries]) => {
+          const totalDeliveriesToday = deliveries.length;
+          
+          // Need at least 2 deliveries to calculate time between
+          if (deliveries.length >= 2) {
+            const timeGaps: number[] = [];
+            
+            // Sort by delivered_at to ensure correct order
+            deliveries.sort((a, b) => 
+              new Date(a.delivered_at).getTime() - new Date(b.delivered_at).getTime()
+            );
+            
+            for (let i = 1; i < deliveries.length; i++) {
+              const prevDeliveredAt = new Date(deliveries[i - 1].delivered_at);
+              const currentStartedAt = new Date(deliveries[i].created_at);
+              
+              // Time between previous delivery completed and current delivery started
+              const gapMs = currentStartedAt.getTime() - prevDeliveredAt.getTime();
+              const gapMinutes = gapMs / (1000 * 60);
+              
+              // Only count positive gaps (ignore if data is out of order)
+              if (gapMinutes > 0 && gapMinutes < 120) { // Max 2 hours gap
+                timeGaps.push(gapMinutes);
+              }
+            }
+            
+            if (timeGaps.length > 0) {
+              const avgTime = timeGaps.reduce((a, b) => a + b, 0) / timeGaps.length;
+              metrics[driverId] = { avgTimeBetweenDeliveries: avgTime, totalDeliveriesToday };
+            } else {
+              metrics[driverId] = { avgTimeBetweenDeliveries: null, totalDeliveriesToday };
+            }
+          } else {
+            metrics[driverId] = { avgTimeBetweenDeliveries: null, totalDeliveriesToday };
+          }
+        });
+      }
+      
+      setDriverMetrics(metrics);
     } catch (error: any) {
       console.error('Error loading data:', error);
       toast({
@@ -1098,6 +1178,34 @@ export default function DriversManagement() {
                             </Button>
                           )}
                         </div>
+
+                        {/* Performance Metrics */}
+                        {(driverMetrics[driver.id]?.totalDeliveriesToday ?? 0) > 0 && (
+                          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <div className="flex items-center gap-2 mb-2">
+                              <TrendingUp className="h-4 w-4 text-blue-500" />
+                              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Desempenho Hoje</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Entregas</p>
+                                <p className="text-lg font-bold">{driverMetrics[driver.id]?.totalDeliveriesToday ?? 0}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Timer className="h-3 w-3" />
+                                  Tempo médio entre
+                                </p>
+                                <p className="text-lg font-bold">
+                                  {driverMetrics[driver.id]?.avgTimeBetweenDeliveries != null
+                                    ? `${Math.round(driverMetrics[driver.id].avgTimeBetweenDeliveries!)} min`
+                                    : '-'
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {activeOrders.length > 0 && (
                           <div className="pt-2 border-t">
