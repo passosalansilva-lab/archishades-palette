@@ -716,7 +716,7 @@ export default function DriversManagement() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="drivers" className="gap-2">
               <Truck className="h-4 w-4" />
               Entregadores
@@ -739,7 +739,56 @@ export default function DriversManagement() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="demo" className="gap-2">
+              <ExternalLink className="h-4 w-4" />
+              Como Funciona
+            </TabsTrigger>
           </TabsList>
+
+          {/* Auto-assign alert when only 1 active driver */}
+          {drivers.filter(d => d.is_active).length === 1 && ordersWithoutDriver.length > 0 && (
+            <Card className="mt-4 border-primary/30 bg-primary/5">
+              <CardContent className="py-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Bike className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Atribuição Rápida</p>
+                      <p className="text-sm text-muted-foreground">
+                        Você tem apenas 1 entregador ativo. Atribua todos os {ordersWithoutDriver.length} pedidos automaticamente?
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      const activeDriver = drivers.find(d => d.is_active && d.is_available);
+                      if (!activeDriver) {
+                        toast({ title: 'Nenhum entregador disponível', variant: 'destructive' });
+                        return;
+                      }
+                      setSaving(true);
+                      try {
+                        for (const order of ordersWithoutDriver) {
+                          await handleAssignOrder(order, activeDriver.id);
+                        }
+                        toast({ title: `${ordersWithoutDriver.length} pedidos atribuídos!` });
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    disabled={saving || !drivers.find(d => d.is_active && d.is_available)}
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Atribuir Todos
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <TabsContent value="drivers" className="mt-6">
             {drivers.length === 0 ? (
@@ -1165,6 +1214,206 @@ export default function DriversManagement() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          {/* Demo Tab - How it works */}
+          <TabsContent value="demo" className="mt-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Phone Mockup */}
+              <Card className="overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
+                  <CardTitle className="flex items-center gap-2">
+                    <Bike className="h-5 w-5" />
+                    App do Entregador - Preview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="relative bg-background">
+                    {/* Phone frame */}
+                    <div className="mx-auto max-w-[320px] p-4">
+                      {/* Status bar mockup */}
+                      <div className="rounded-t-2xl bg-card border border-b-0 p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+                              <Bike className="h-5 w-5 text-primary-foreground" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-sm">João M.</p>
+                              <p className="text-xs text-muted-foreground">Entregador</p>
+                            </div>
+                          </div>
+                          <Badge className="bg-green-500 text-white text-xs">Online</Badge>
+                        </div>
+                      </div>
+
+                      {/* Control card */}
+                      <div className="bg-card border-x p-3 space-y-3">
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                              <CheckCircle className="h-3 w-3 text-white" />
+                            </div>
+                            <span className="text-sm">Disponível para entregas</span>
+                          </div>
+                          <div className="w-10 h-5 rounded-full bg-green-500 relative">
+                            <div className="absolute right-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial card */}
+                      <div className="bg-card border-x p-3">
+                        <div className="p-3 rounded-lg bg-muted/30 border space-y-2">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <Wallet className="h-4 w-4 text-primary" />
+                            Meu Financeiro
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="p-2 rounded bg-green-500/10 border border-green-500/20">
+                              <p className="text-xs text-muted-foreground">A receber</p>
+                              <p className="font-bold text-green-600">R$ 85,00</p>
+                            </div>
+                            <div className="p-2 rounded bg-primary/10 border border-primary/20">
+                              <p className="text-xs text-muted-foreground">Já recebido</p>
+                              <p className="font-bold text-primary">R$ 420,00</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Order card */}
+                      <div className="bg-card border-x p-3 space-y-2">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          Minhas Entregas (2)
+                        </p>
+                        
+                        {/* Order 1 - Priority */}
+                        <div className="p-3 rounded-lg border-2 border-primary bg-primary/5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] border-primary text-primary">Próxima</Badge>
+                              <span className="text-xs font-medium">Pizzaria Bella</span>
+                            </div>
+                            <Badge className="text-[10px] bg-blue-500">Em Entrega</Badge>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold">Maria Silva</span>
+                            <span className="font-bold text-primary">R$ 58,90</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-start gap-1">
+                            <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                            <span>Av. Brasil, 1250 - Centro</span>
+                          </div>
+                          <Button size="sm" className="w-full h-8 text-xs">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Concluir Entrega
+                          </Button>
+                        </div>
+
+                        {/* Order 2 - Queue */}
+                        <div className="p-3 rounded-lg border bg-muted/30 space-y-2 opacity-70">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium">Pizzaria Bella</span>
+                            <Badge variant="secondary" className="text-[10px]">Na Fila #2</Badge>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold">Pedro Santos</span>
+                            <span className="font-bold">R$ 42,50</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-start gap-1">
+                            <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                            <span>R. das Flores, 88 - Jardim</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom rounded */}
+                      <div className="rounded-b-2xl bg-card border border-t-0 h-4" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Instructions */}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Como Funciona a Fila</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="font-bold text-primary">1</span>
+                      </div>
+                      <div>
+                        <p className="font-medium">Atribuição Automática</p>
+                        <p className="text-sm text-muted-foreground">
+                          Quando há apenas 1 entregador ativo, você pode atribuir todos os pedidos automaticamente.
+                        </p>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="font-bold text-primary">2</span>
+                      </div>
+                      <div>
+                        <p className="font-medium">Fila com Prioridade (FIFO)</p>
+                        <p className="text-sm text-muted-foreground">
+                          Os pedidos são ordenados por ordem de chegada. O primeiro a entrar é o primeiro a ser entregue.
+                        </p>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="font-bold text-primary">3</span>
+                      </div>
+                      <div>
+                        <p className="font-medium">Interface Sem Refresh</p>
+                        <p className="text-sm text-muted-foreground">
+                          O app do entregador atualiza em tempo real sem recarregar a página, evitando perder a posição.
+                        </p>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="font-bold text-primary">4</span>
+                      </div>
+                      <div>
+                        <p className="font-medium">Próxima Entrega Automática</p>
+                        <p className="text-sm text-muted-foreground">
+                          Ao concluir uma entrega, a próxima da fila já aparece automaticamente para o entregador.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-primary/30 bg-primary/5">
+                  <CardContent className="py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <ExternalLink className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">Testar App do Entregador</p>
+                        <p className="text-sm text-muted-foreground">
+                          Compartilhe o link com seus entregadores para que acessem
+                        </p>
+                      </div>
+                      <Button onClick={copyDriverLink} variant="outline" size="sm">
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copiar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

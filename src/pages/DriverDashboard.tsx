@@ -625,7 +625,31 @@ export default function DriverDashboard() {
 
       toast.success('Pedido aceito! Você agora é responsável pela entrega.');
       setPendingOffers(prev => prev.filter(o => o.id !== offer.id));
-      loadDriverData();
+      
+      // Update local state directly instead of reloading to avoid scroll
+      if (offer.order) {
+        const newOrder: Order = {
+          id: offer.order.id,
+          customer_name: offer.order.customer_name,
+          customer_phone: offer.order.customer_phone,
+          customer_email: null,
+          status: 'out_for_delivery',
+          total: offer.order.total,
+          subtotal: offer.order.subtotal,
+          delivery_fee: offer.order.delivery_fee,
+          payment_method: offer.order.payment_method,
+          payment_status: 'pending',
+          created_at: offer.order.created_at,
+          notes: offer.order.notes,
+          needs_change: offer.order.needs_change,
+          change_for: offer.order.change_for,
+          queue_position: null,
+          delivery_address: offer.order.delivery_address as Order['delivery_address'],
+          company: offer.order.company as Order['company'],
+          order_items: offer.order.order_items,
+        };
+        setOrders(prev => [...prev, newOrder]);
+      }
     } catch (error: any) {
       toast.error(error.message || 'Erro ao aceitar pedido');
     } finally {
@@ -655,7 +679,9 @@ export default function DriverDashboard() {
       .eq('id', driver.id);
 
     toast.success('Entrega aceita! Inicie quando estiver pronto.');
-    loadDriverData();
+    
+    // Update local state directly instead of reloading to avoid scroll
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'ready' } : o));
     setUpdatingOrder(null);
   };
 
@@ -678,7 +704,9 @@ export default function DriverDashboard() {
     setShowMapForOrder(orderId);
     
     toast.success('Entrega iniciada! Boa viagem.');
-    loadDriverData();
+    
+    // Update local state directly instead of reloading to avoid scroll
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'out_for_delivery' } : o));
     setUpdatingOrder(null);
   };
 
@@ -720,6 +748,9 @@ export default function DriverDashboard() {
       setShowMapForOrder(null);
     }
 
+    // Remove the completed order from local state immediately (no scroll)
+    setOrders(prev => prev.filter(o => o.id !== orderId));
+
     // Process the driver's queue to check for next order
     try {
       const { data: queueResult, error: queueError } = await supabase.functions.invoke('process-driver-queue', {
@@ -733,6 +764,8 @@ export default function DriverDashboard() {
           description: `Você tem mais ${queueResult.remainingInQueue} ${queueResult.remainingInQueue === 1 ? 'pedido' : 'pedidos'} na fila.`,
           duration: 5000,
         });
+        // Reload to get the new order in the list
+        loadAssignedOrders(driver.id);
       }
     } catch (queueErr) {
       console.error('Error calling process-driver-queue:', queueErr);
@@ -750,7 +783,6 @@ export default function DriverDashboard() {
     }
 
     toast.success('Entrega concluída com sucesso!');
-    loadDriverData();
     // Reload financials to update totals immediately
     if (driver?.id) {
       loadFinancials(driver.id);
