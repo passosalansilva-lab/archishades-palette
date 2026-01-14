@@ -116,18 +116,19 @@ serve(async (req) => {
     let queued = false;
 
     if (driverIsBusy) {
+      // Driver is busy - add to queue instead of blocking
       const { data: lastQueue } = await supabase
         .from("orders")
         .select("queue_position")
         .eq("delivery_driver_id", driverId)
         .eq("status", "queued")
-        .order("queue_position", { ascending: false, nullsFirst: false }) // importante: nulls no final
+        .order("queue_position", { ascending: false, nullsFirst: false })
         .limit(1);
 
       const lastPos = lastQueue?.[0]?.queue_position;
-
-      // Tratamento seguro contra null ou valores inválidos
       queuePosition = (typeof lastPos === 'number' && !isNaN(lastPos) ? lastPos : 0) + 1;
+      newStatus = "queued"; // Mark as queued, not awaiting_driver
+      queued = true;
     }
 
     /* ===============================
@@ -166,16 +167,27 @@ serve(async (req) => {
     }
 
     /* ===============================
-       NOTIFICAÇÃO (OPCIONAL)
+       NOTIFICAÇÃO
     =============================== */
-    if (driver.user_id && !queued) {
-      await supabase.from("notifications").insert({
-        user_id: driver.user_id,
-        title: "Nova entrega disponível",
-        message: `Pedido #${orderId.slice(0, 8)}`,
-        type: "info",
-        data: { orderId, companyId },
-      });
+    if (driver.user_id) {
+      if (queued) {
+        // Notify driver about queued order
+        await supabase.from("notifications").insert({
+          user_id: driver.user_id,
+          title: "Pedido adicionado à fila",
+          message: `Pedido #${orderId.slice(0, 8)} - Posição ${queuePosition} na fila`,
+          type: "info",
+          data: { orderId, companyId, queuePosition },
+        });
+      } else {
+        await supabase.from("notifications").insert({
+          user_id: driver.user_id,
+          title: "Nova entrega disponível",
+          message: `Pedido #${orderId.slice(0, 8)}`,
+          type: "info",
+          data: { orderId, companyId },
+        });
+      }
     }
 
     return new Response(
@@ -184,6 +196,9 @@ serve(async (req) => {
         driverName: driver.driver_name,
         queued,
         queuePosition,
+        message: queued 
+          ? `Pedido adicionado à fila (posição ${queuePosition})`
+          : "Pedido atribuído ao entregador",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

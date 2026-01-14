@@ -1297,15 +1297,35 @@ export default function DriverDashboard() {
               </CardContent>
             </Card>
           ) : orders.length === 0 ? null : (
-            orders.map((order, index) => (
-              <Card key={order.id} className={order.status === 'awaiting_driver' ? 'ring-2 ring-destructive animate-pulse' : index === 0 ? 'ring-2 ring-primary' : ''}>
+            orders.map((order, index) => {
+              const isQueued = order.status === 'queued';
+              const isFirst = index === 0 && !isQueued;
+              
+              return (
+              <Card 
+                key={order.id} 
+                className={
+                  order.status === 'awaiting_driver' 
+                    ? 'ring-2 ring-destructive animate-pulse' 
+                    : isQueued
+                    ? 'opacity-75 border-dashed'
+                    : isFirst 
+                    ? 'ring-2 ring-primary' 
+                    : ''
+                }
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {order.status === 'awaiting_driver' && (
                         <Badge variant="destructive" className="text-xs animate-bounce">Nova!</Badge>
                       )}
-                      {order.status !== 'awaiting_driver' && index === 0 && (
+                      {isQueued && (
+                        <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-500">
+                          Fila #{order.queue_position}
+                        </Badge>
+                      )}
+                      {!isQueued && order.status !== 'awaiting_driver' && index === 0 && (
                         <Badge variant="outline" className="text-xs">Próxima</Badge>
                       )}
                       <CardTitle className="text-base">{order.company.name}</CardTitle>
@@ -1480,59 +1500,73 @@ export default function DriverDashboard() {
                     </div>
                   )}
 
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2">
-                    {order.status === 'awaiting_driver' && (
-                      <Button
-                        className="flex-1"
-                        size="lg"
-                        variant="destructive"
-                        onClick={() => acceptDelivery(order.id)}
-                        disabled={updatingOrder === order.id}
-                      >
-                        {updatingOrder === order.id ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <ThumbsUp className="h-4 w-4 mr-2" />
-                        )}
-                        Aceitar Entrega
-                      </Button>
-                    )}
-                    {order.status === 'ready' && (
-                      <Button
-                        className="flex-1"
-                        size="lg"
-                        onClick={() => startDelivery(order.id)}
-                        disabled={updatingOrder === order.id}
-                      >
-                        {updatingOrder === order.id ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Play className="h-4 w-4 mr-2" />
-                        )}
-                        Iniciar Entrega
-                      </Button>
-                    )}
-                    {order.status === 'out_for_delivery' && (
-                      <Button
-                        className="flex-1"
-                        size="lg"
-                        variant="default"
-                        onClick={() => completeDelivery(order.id)}
-                        disabled={updatingOrder === order.id}
-                      >
-                        {updatingOrder === order.id ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                        )}
-                        Concluir Entrega
-                      </Button>
-                    )}
-                  </div>
+                  {/* Actions - Hide for queued orders */}
+                  {!isQueued && (
+                    <div className="flex gap-2 pt-2">
+                      {order.status === 'awaiting_driver' && (
+                        <Button
+                          className="flex-1"
+                          size="lg"
+                          variant="destructive"
+                          onClick={() => acceptDelivery(order.id)}
+                          disabled={updatingOrder === order.id}
+                        >
+                          {updatingOrder === order.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <ThumbsUp className="h-4 w-4 mr-2" />
+                          )}
+                          Aceitar Entrega
+                        </Button>
+                      )}
+                      {order.status === 'ready' && (
+                        <Button
+                          className="flex-1"
+                          size="lg"
+                          onClick={() => startDelivery(order.id)}
+                          disabled={updatingOrder === order.id}
+                        >
+                          {updatingOrder === order.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Play className="h-4 w-4 mr-2" />
+                          )}
+                          Iniciar Entrega
+                        </Button>
+                      )}
+                      {order.status === 'out_for_delivery' && (
+                        <Button
+                          className="flex-1"
+                          size="lg"
+                          variant="default"
+                          onClick={() => completeDelivery(order.id)}
+                          disabled={updatingOrder === order.id}
+                        >
+                          {updatingOrder === order.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                          )}
+                          Concluir Entrega
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Queued order info */}
+                  {isQueued && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-center">
+                      <p className="text-amber-700 dark:text-amber-400 font-medium">
+                        Aguardando na fila (posição {order.queue_position})
+                      </p>
+                      <p className="text-muted-foreground text-xs mt-1">
+                        Este pedido será liberado automaticamente quando você concluir a entrega atual
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ))
+            );})
           )}
         </div>
       </main>
