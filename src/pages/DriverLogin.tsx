@@ -172,12 +172,11 @@ export default function DriverLogin() {
         return;
       }
 
-      // Fallback: magic link (legado)
+      // Login por link/OTP foi desativado (evita cair em #error=otp_expired)
       if (loginData?.magicLink) {
-        toast.success('Entrando...', {
-          description: 'Aguarde um instante, estamos validando seu acesso.',
+        toast.error('Login por link desativado', {
+          description: 'Use seu email nesta tela para entrar.',
         });
-        window.location.assign(loginData.magicLink);
         return;
       }
 

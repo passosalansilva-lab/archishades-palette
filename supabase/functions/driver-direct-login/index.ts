@@ -84,9 +84,38 @@ serve(async (req) => {
       driverQuery = driverQuery.eq("company_id", targetCompanyId);
     }
 
-    const { data: drivers, error: driverError } = await driverQuery
-      .order("created_at", { ascending: false })
-      .limit(1);
+    let drivers: any[] | null = null;
+    let driverError: any = null;
+
+    {
+      const res = await driverQuery
+        .order("created_at", { ascending: false })
+        .limit(1);
+      drivers = res.data as any[] | null;
+      driverError = res.error;
+    }
+
+    // Compat: se a coluna auth_password ainda não existir, tenta novamente sem ela
+    if (driverError?.message && String(driverError.message).includes("auth_password")) {
+      logStep("auth_password column missing, retrying without it");
+
+      let fallbackQuery = supabaseAdmin
+        .from("delivery_drivers")
+        .select("id, email, driver_name, is_active, user_id, company_id")
+        .eq("email", normalizedEmail)
+        .eq("is_active", true);
+
+      if (targetCompanyId) {
+        fallbackQuery = fallbackQuery.eq("company_id", targetCompanyId);
+      }
+
+      const fallbackRes = await fallbackQuery
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      drivers = fallbackRes.data as any[] | null;
+      driverError = fallbackRes.error;
+    }
 
     if (driverError) {
       logStep("Error querying driver", { error: driverError.message });

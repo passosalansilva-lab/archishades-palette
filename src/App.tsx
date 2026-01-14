@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { ProtectedFeatureRoute } from "@/components/layout/ProtectedFeatureRoute";
@@ -83,6 +85,41 @@ const queryClient = new QueryClient({
   },
 });
 
+function AuthHashErrorHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const rawHash = window.location.hash;
+    if (!rawHash || rawHash.length <= 1) return;
+
+    const params = new URLSearchParams(rawHash.startsWith('#') ? rawHash.slice(1) : rawHash);
+    const error = params.get('error');
+    if (!error) return;
+
+    const errorCode = params.get('error_code');
+    const errorDescription = params.get('error_description');
+
+    // Limpa o hash para não ficar re-exibindo o erro ao recarregar
+    window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+
+    if (errorCode === 'otp_expired') {
+      toast.error('Link expirado', {
+        description: 'Esse link de email não é mais usado. Entre com seu email na tela do entregador.',
+      });
+      navigate('/driver/login', { replace: true });
+      return;
+    }
+
+    toast.error('Não foi possível autenticar', {
+      description: errorDescription
+        ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
+        : 'Tente entrar novamente com seu email.',
+    });
+  }, [navigate]);
+
+  return null;
+}
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -90,9 +127,10 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
-          <PageTitle>
-            <Routes>
+            <BrowserRouter>
+            <AuthHashErrorHandler />
+            <PageTitle>
+              <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
