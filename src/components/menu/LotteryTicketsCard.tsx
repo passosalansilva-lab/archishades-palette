@@ -65,19 +65,19 @@ export function LotteryTicketsCard({
       setSettings(settingsData);
 
       // Get customer's ticket count (only if not in pending mode)
-      // Busca tickets agrupando por customer_id vinculado ao mesmo email/telefone
       if (!pendingOrderMode && customerId) {
-        const { data: ticketsData, error: ticketsError } = await supabase
+        // Query tickets by customer_id - the trigger should properly link via user_id
+        const ticketsResult = await supabase
           .from('lottery_tickets')
           .select('quantity')
           .eq('company_id', companyId)
           .eq('customer_id', customerId)
           .eq('is_used', false);
 
-        if (ticketsError) throw ticketsError;
-
-        const total = ticketsData?.reduce((sum, t) => sum + t.quantity, 0) || 0;
-        setTicketCount(total);
+        if (!ticketsResult.error && ticketsResult.data) {
+          const total = ticketsResult.data.reduce((sum, t) => sum + t.quantity, 0);
+          setTicketCount(total);
+        }
       }
 
       // Get last draw
