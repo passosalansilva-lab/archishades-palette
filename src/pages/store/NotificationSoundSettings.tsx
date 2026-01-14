@@ -124,22 +124,17 @@ export default function NotificationSoundSettings() {
     if (!user) return;
     setSaving(true);
     try {
-      const rows = Object.values(settings).map((row) => {
-        const base = {
-          user_id: user.id,
-          event_type: row.event_type,
-          sound_key: row.sound_key,
-          enabled: row.enabled,
-          volume: row.volume,
-        };
-
-        // Só envia o id quando já existe um registro salvo, evitando null em coluna NOT NULL
-        return row.id ? { id: row.id, ...base } : base;
-      });
+      const rows = Object.values(settings).map((row) => ({
+        user_id: user.id,
+        event_type: row.event_type,
+        sound_key: row.sound_key,
+        enabled: row.enabled,
+        volume: row.volume,
+      }));
 
       const { data, error } = await supabase
         .from('notification_sound_settings')
-        .upsert(rows, { onConflict: 'id' })
+        .upsert(rows, { onConflict: 'user_id,event_type' })
         .select();
 
       if (error) throw error;
