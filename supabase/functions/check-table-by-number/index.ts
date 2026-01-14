@@ -137,55 +137,67 @@ Deno.serve(async (req) => {
       // Generate a unique session token
       const sessionToken = crypto.randomUUID()
       
-      // Create new session with customer data
-      const { data: newSession, error: createError } = await supabase
-        .from('table_sessions')
-        .insert({
-          table_id: table.id,
-          company_id: table.company_id,
-          session_token: sessionToken,
-          status: 'open',
-          opened_at: new Date().toISOString(),
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          customer_email: customerEmail || null,
-          customer_count: customerCount || 1
-        })
-        .select('id, session_token, opened_at, customer_name')
-        .single()
-      
-       if (createError) {
-         console.error('Error creating session:', createError)
+      // Use security definer function to create session (bypasses RLS)
+      const { data: newSessionData, error: createError } = await supabase.rpc(
+        'create_table_session',
+        {
+          _table_id: table.id,
+          _company_id: table.company_id,
+          _session_token: sessionToken,
+          _customer_name: customerName,
+          _customer_phone: customerPhone,
+          _customer_email: customerEmail || null,
+          _customer_count: customerCount || 1,
+        }
+      )
 
-         const ce = createError as unknown as {
-           code?: string
-           message?: string
-           details?: string
-           hint?: string
-         }
+      if (createError) {
+        console.error('Error creating session via RPC:', createError)
 
-         const debug = {
-           code: ce.code,
-           message: ce.message,
-           details: ce.details,
-           hint: ce.hint,
-         }
+        const ce = createError as unknown as {
+          code?: string
+          message?: string
+          details?: string
+          hint?: string
+        }
 
-         // Return a user-friendly error (200 status to avoid invoke error handling)
-         return new Response(
-           JSON.stringify({
-             hasActiveSession: false,
-             error: 'session_creation_failed',
-             message: 'Erro ao abrir a mesa. Por favor, tente novamente.',
-             debug,
-           }),
-           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-         )
-       }
-      
+        const debug = {
+          code: ce.code,
+          message: ce.message,
+          details: ce.details,
+          hint: ce.hint,
+        }
+
+        return new Response(
+          JSON.stringify({
+            hasActiveSession: false,
+            error: 'session_creation_failed',
+            message: ce.message?.includes('Já existe')
+              ? 'Já existe uma sessão aberta para esta mesa.'
+              : 'Erro ao abrir a mesa. Por favor, tente novamente.',
+            debug,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        )
+      }
+
+      // RPC returns an array, get first row
+      const newSession = Array.isArray(newSessionData) ? newSessionData[0] : newSessionData
+
+      if (!newSession) {
+        return new Response(
+          JSON.stringify({
+            hasActiveSession: false,
+            error: 'session_creation_failed',
+            message: 'Erro ao abrir a mesa. Sessão não retornada.',
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        )
+      }
+
       console.log('New session created for table', tableNumber, 'with token:', sessionToken)
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           hasActiveSession: true,
           sessionId: newSession.id,
           sessionToken: newSession.session_token,
@@ -194,9 +206,9 @@ Deno.serve(async (req) => {
           tableName: table.name || `Mesa ${table.table_number}`,
           customerName: newSession.customer_name,
           openedAt: newSession.opened_at,
-          newSession: true
+          newSession: true,
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
