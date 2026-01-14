@@ -394,35 +394,42 @@ function PublicMenuContent() {
     
     try {
       const response = await supabase.functions.invoke('check-table-by-number', {
-        body: { 
-          tableNumber: pendingTableNumber, 
+        body: {
+          tableNumber: pendingTableNumber,
           companySlug: slug,
           customerName: data.name,
           customerEmail: data.email,
           customerPhone: data.phone,
-          customerCount: data.customerCount
-        }
+          customerCount: data.customerCount,
+        },
       });
-      
+
       if (response.error) {
         console.error('Error creating session:', response.error);
         toast.error('Erro ao abrir mesa. Tente novamente.');
         setIsCreatingSession(false);
         return;
       }
-      
+
       const responseData = response.data;
-      
-      if (responseData.hasActiveSession && responseData.sessionToken) {
+
+      // Edge function can return 200 with an error payload to avoid invoke() throwing.
+      if (responseData?.error || responseData?.hasActiveSession === false) {
+        console.error('[PublicMenu] Session open failed:', responseData);
+        toast.error(responseData?.message || 'Erro ao abrir mesa. Tente novamente.');
+        return;
+      }
+
+      if (responseData?.hasActiveSession && responseData?.sessionToken) {
         // Redirect to token-based URL
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.delete('mesa');
         newUrl.searchParams.set('sessao', responseData.sessionToken);
         window.history.replaceState({}, '', newUrl.toString());
-        
+
         // Update ref to prevent re-check
         tableSessionCheckRef.current = `${responseData.sessionToken}-${responseData.tableNumber}-${slug}`;
-        
+
         setSessionToken(responseData.sessionToken);
         setTableNumber(responseData.tableNumber);
         setTableId(responseData.tableId);
@@ -431,10 +438,11 @@ function PublicMenuContent() {
         setTableSessionValid(true);
         setShowTableCustomerModal(false);
         setPendingTableNumber(null);
-        
+
         toast.success(`Olá ${data.name}! Mesa ${responseData.tableNumber} aberta com sucesso!`);
       } else {
-        toast.error('Erro ao abrir mesa. Tente novamente.');
+        console.error('[PublicMenu] Unexpected session open response:', responseData);
+        toast.error(responseData?.message || 'Erro ao abrir mesa. Tente novamente.');
       }
     } catch (error) {
       console.error('Error creating session with customer data:', error);
