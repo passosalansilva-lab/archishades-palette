@@ -131,18 +131,30 @@ serve(async (req) => {
     const template = await getEmailTemplate("company-approval");
     
     const variables = {
+      // Owner
       ownerName,
       owner_name: ownerName,
-      ownerEmail: user.user.email,
+      owner: ownerName,
       owner_email: user.user.email,
+      ownerEmail: user.user.email,
+
+      // Company / Store (aliases para evitar template quebrar)
       companyName: company.name,
       company_name: company.name,
+      company: company.name,
+      storeName: company.name,
+      store_name: company.name,
+      store: company.name,
+
       companySlug: company.slug,
       company_slug: company.slug,
+      slug: company.slug,
+
       loginUrl,
       login_url: loginUrl,
       dashboardUrl,
       dashboard_url: dashboardUrl,
+
       year: new Date().getFullYear().toString(),
     };
 
