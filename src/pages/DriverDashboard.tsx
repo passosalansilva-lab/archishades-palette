@@ -290,16 +290,20 @@ export default function DriverDashboard() {
   }, [driver?.id]);
 
   useEffect(() => {
+    if (authLoading) return;
+
     if (!user) {
-      navigate('/auth');
+      // IMPORTANT: driver area must never redirect to the admin/store auth flow
+      navigate('/driver/login', { replace: true });
       return;
     }
+
     loadDriverData();
-    
+
     return () => {
       stopLocationTracking();
     };
-  }, [user, navigate, stopLocationTracking]);
+  }, [user, authLoading, navigate, stopLocationTracking]);
 
   // Load pending offers when driver is loaded
   useEffect(() => {
