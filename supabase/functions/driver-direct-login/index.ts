@@ -173,45 +173,63 @@ serve(async (req) => {
       logStep("Auth user created and linked", { userId });
     }
 
-    // === LOGIN DIRETO ===
-    // A função retorna um magicLink (com redirect) que, ao abrir no browser, cria a sessão do usuário.
-    // O frontend deve apenas redirecionar para este link.
-    logStep("Generating magic link for passwordless login");
+    // === LOGIN DIRETO - Gera magic link e extrai o token para criar sessão ===
+    logStep("Generating magic link to extract token");
 
-    const origin = req.headers.get("origin") || "";
-    const redirectTo = origin ? `${origin}/driver` : undefined;
-
-    const { data: signInData, error: signInError } = await supabaseAdmin.auth.admin.generateLink({
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: "magiclink",
       email: normalizedEmail,
-      options: redirectTo ? { redirectTo } : undefined,
     });
 
-    if (signInError) {
-      logStep("generateLink failed", { message: signInError.message });
+    if (linkError || !linkData?.properties?.hashed_token) {
+      logStep("generateLink failed", { message: linkError?.message });
       return new Response(
-        JSON.stringify({ error: "Não foi possível fazer login. Contate o estabelecimento." }),
+        JSON.stringify({ error: "Não foi possível gerar link de login. Tente novamente." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const magicLink = signInData?.properties?.action_link;
+    // Extrai o token do link gerado
+    const actionLink = linkData.properties.action_link;
+    const urlObj = new URL(actionLink);
+    const token = urlObj.searchParams.get("token");
+    const tokenType = urlObj.searchParams.get("type") || "magiclink";
 
-    if (!magicLink) {
-      logStep("generateLink missing action_link");
+    if (!token) {
+      logStep("Token not found in action_link", { actionLink });
       return new Response(
-        JSON.stringify({ error: "Falha ao criar link de login" }),
+        JSON.stringify({ error: "Falha ao extrair token de login" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    logStep("Login link generated", { userId: signInData.user?.id, redirectTo });
+    logStep("Token extracted, verifying OTP to create session");
+
+    // Usa o token para criar uma sessão válida
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.verifyOtp({
+      token_hash: linkData.properties.hashed_token,
+      type: "magiclink",
+    });
+
+    if (sessionError || !sessionData?.session) {
+      logStep("verifyOtp failed", { message: sessionError?.message });
+      return new Response(
+        JSON.stringify({ error: "Falha ao criar sessão de login. Tente novamente." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    logStep("Session created successfully", { userId: sessionData.user?.id });
 
     return new Response(
       JSON.stringify({
-        magicLink,
-        redirectTo: redirectTo || null,
-        user: signInData.user,
+        session: {
+          access_token: sessionData.session.access_token,
+          refresh_token: sessionData.session.refresh_token,
+          expires_in: sessionData.session.expires_in,
+          expires_at: sessionData.session.expires_at,
+        },
+        user: sessionData.user,
         companyId: driver.company_id,
         driverName: driver.driver_name,
       }),

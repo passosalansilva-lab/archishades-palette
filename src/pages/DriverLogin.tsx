@@ -148,16 +148,7 @@ export default function DriverLogin() {
         return;
       }
 
-      // Sucesso (novo fluxo): a função retorna um magicLink com redirect e o browser cria a sessão
-      if (loginData?.magicLink) {
-        toast.success('Entrando...', {
-          description: 'Aguarde um instante, estamos validando seu acesso.',
-        });
-        window.location.assign(loginData.magicLink);
-        return;
-      }
-
-      // Sucesso (legado)
+      // Sucesso: a função retorna session com tokens prontos
       if (loginData?.session) {
         const { error: sessionError } = await supabase.auth.setSession({
           access_token: loginData.session.access_token,
@@ -165,6 +156,7 @@ export default function DriverLogin() {
         });
 
         if (sessionError) {
+          console.error('[DriverLogin] setSession error', sessionError);
           toast.error('Erro ao salvar login', {
             description: 'Tente novamente ou reinicie o aplicativo.',
           });
@@ -180,6 +172,16 @@ export default function DriverLogin() {
         return;
       }
 
+      // Fallback: magic link (legado)
+      if (loginData?.magicLink) {
+        toast.success('Entrando...', {
+          description: 'Aguarde um instante, estamos validando seu acesso.',
+        });
+        window.location.assign(loginData.magicLink);
+        return;
+      }
+
+      console.error('[DriverLogin] Unexpected response format', loginData);
       toast.error('Erro inesperado', {
         description: 'Resposta inválida do servidor.',
       });
