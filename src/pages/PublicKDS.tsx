@@ -413,7 +413,7 @@ export default function PublicKDS() {
         className={cn(
           "rounded-xl overflow-hidden shadow-xl",
           isDarkMode ? "bg-slate-800" : "bg-white",
-          urgency === 'urgent' && "ring-4 ring-red-500 animate-pulse",
+          urgency === 'urgent' && "ring-4 ring-red-500",
           urgency === 'warning' && "ring-2 ring-amber-500"
         )}
       >
