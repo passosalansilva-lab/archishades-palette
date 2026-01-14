@@ -59,6 +59,7 @@ import { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFavorites } from '@/hooks/useFavorites';
+import { applyCompanyBranding } from '@/hooks/useCompanyColors';
 
 interface Company {
   id: string;
@@ -685,6 +686,12 @@ function PublicMenuContent() {
       }
 
       setCompany(companyData);
+      
+      // Apply company branding colors to :root for all dialogs/modals to inherit
+      applyCompanyBranding({
+        primaryColor: companyData.primary_color || undefined,
+        secondaryColor: (companyData as any).secondary_color || undefined,
+      });
 
       const { data: categoriesData, error: categoriesError } = await supabase
         .from('categories')
@@ -1325,17 +1332,7 @@ function PublicMenuContent() {
   }
 
   return (
-    <div 
-      className="min-h-screen bg-background pb-32"
-      style={(() => {
-        const primaryHsl = company.primary_color ? hexToHsl(company.primary_color) : null;
-        const secondaryHsl = (company as any).secondary_color ? hexToHsl((company as any).secondary_color) : null;
-        return {
-          ...(primaryHsl ? { '--primary': primaryHsl } : {}),
-          ...(secondaryHsl ? { '--secondary': secondaryHsl } : {}),
-        } as React.CSSProperties;
-      })()}
-    >
+    <div className="min-h-screen bg-background pb-32">
       {/* Restaurant Header with Cover & Logo */}
       <div className="relative">
         {/* Full-bleed cover image */}
