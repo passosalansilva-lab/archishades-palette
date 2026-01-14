@@ -14,7 +14,7 @@ import { Play, Pause, Upload, X, Music } from 'lucide-react';
 
 interface SoundSettingRow {
   id?: string;
-  event_type: 'new_order' | 'status_change' | 'driver_new_order';
+  event_type: 'new_order' | 'status_change' | 'driver_new_order' | 'kds_new_order';
   sound_key: string;
   enabled: boolean;
   volume: number;
@@ -24,6 +24,7 @@ const EVENT_LABELS: Record<SoundSettingRow['event_type'], string> = {
   new_order: 'Novo pedido recebido',
   status_change: 'Mudança de status do pedido',
   driver_new_order: 'Nova entrega atribuída ao entregador',
+  kds_new_order: 'Novo pedido no KDS (cozinha)',
 };
 
 // Som padrão do sistema
@@ -45,6 +46,10 @@ const DRIVER_SOUND_MAP: Record<string, string> = {
   classic: DEFAULT_NOTIFICATION_SOUND,
 };
 
+const KDS_SOUND_MAP: Record<string, string> = {
+  classic: DEFAULT_NOTIFICATION_SOUND,
+};
+
 export default function NotificationSoundSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -52,6 +57,7 @@ export default function NotificationSoundSettings() {
     new_order: { event_type: 'new_order', sound_key: 'classic', enabled: true, volume: 0.6 },
     status_change: { event_type: 'status_change', sound_key: 'classic', enabled: true, volume: 0.6 },
     driver_new_order: { event_type: 'driver_new_order', sound_key: 'classic', enabled: true, volume: 0.6 },
+    kds_new_order: { event_type: 'kds_new_order', sound_key: 'classic', enabled: true, volume: 0.6 },
   });
   const [saving, setSaving] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -153,6 +159,7 @@ export default function NotificationSoundSettings() {
           new_order: map.new_order || prev.new_order,
           status_change: map.status_change || prev.status_change,
           driver_new_order: map.driver_new_order || prev.driver_new_order,
+          kds_new_order: map.kds_new_order || prev.kds_new_order,
         }));
       }
 
@@ -199,6 +206,8 @@ export default function NotificationSoundSettings() {
       url = STATUS_SOUND_MAP[soundKey];
     } else if (soundKey in DRIVER_SOUND_MAP && eventType === 'driver_new_order') {
       url = DRIVER_SOUND_MAP[soundKey];
+    } else if (soundKey in KDS_SOUND_MAP && eventType === 'kds_new_order') {
+      url = KDS_SOUND_MAP[soundKey];
     } else {
       // quando é som personalizado, soundKey já é a URL completa
       url = soundKey;
@@ -290,7 +299,7 @@ export default function NotificationSoundSettings() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {(['new_order', 'status_change', 'driver_new_order'] as SoundSettingRow['event_type'][]).map(
+          {(['new_order', 'status_change', 'driver_new_order', 'kds_new_order'] as SoundSettingRow['event_type'][]).map(
             (eventType) => {
               const row = settings[eventType];
               return (

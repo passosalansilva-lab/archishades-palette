@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,18 @@ import {
   MousePointer2,
   Utensils,
   Sun,
-  Moon
+  Moon,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+
+const KDS_THEME_KEY = "kds-theme-mode";
+const KDS_SOUND_ENABLED_KEY = "kds-sound-enabled";
+const DEFAULT_NOTIFICATION_SOUND = "/sounds/default-notification.mp3";
 
 interface OrderItem {
   id: string;
@@ -66,8 +72,51 @@ export default function PublicKDS() {
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [interactionMode, setInteractionMode] = useState(true); // Botões habilitados por padrão
-  const [isDarkMode, setIsDarkMode] = useState(true); // Tema escuro por padrão
+  const [interactionMode, setInteractionMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem(KDS_THEME_KEY);
+    return saved ? saved === "dark" : true;
+  });
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    const saved = localStorage.getItem(KDS_SOUND_ENABLED_KEY);
+    return saved ? saved === "true" : true;
+  });
+  
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const previousOrderIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoadRef = useRef(true);
+
+  // Persist theme to localStorage
+  useEffect(() => {
+    localStorage.setItem(KDS_THEME_KEY, isDarkMode ? "dark" : "light");
+  }, [isDarkMode]);
+
+  // Persist sound setting to localStorage
+  useEffect(() => {
+    localStorage.setItem(KDS_SOUND_ENABLED_KEY, String(soundEnabled));
+  }, [soundEnabled]);
+
+  // Play notification sound for new orders
+  const playNotificationSound = useCallback(() => {
+    if (!soundEnabled) return;
+    
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      
+      const audio = new Audio(DEFAULT_NOTIFICATION_SOUND);
+      audio.volume = 0.7;
+      audioRef.current = audio;
+      
+      audio.play().catch((err) => {
+        console.warn("Could not play notification sound:", err);
+      });
+    } catch (err) {
+      console.warn("Error playing sound:", err);
+    }
+  }, [soundEnabled]);
 
   // Update clock every second for more precision
   useEffect(() => {
@@ -139,7 +188,29 @@ export default function PublicKDS() {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      setOrders(data || []);
+      
+      const newOrders = data || [];
+      
+      // Check for new orders and play sound
+      if (!isFirstLoadRef.current && newOrders.length > 0) {
+        const newOrderIds = new Set(newOrders.map(o => o.id));
+        const previousIds = previousOrderIdsRef.current;
+        
+        // Find truly new orders (not in previous set)
+        const hasNewOrder = newOrders.some(order => 
+          !previousIds.has(order.id) && order.status === 'confirmed'
+        );
+        
+        if (hasNewOrder) {
+          playNotificationSound();
+        }
+      }
+      
+      // Update refs
+      previousOrderIdsRef.current = new Set(newOrders.map(o => o.id));
+      isFirstLoadRef.current = false;
+      
+      setOrders(newOrders);
     } catch (err) {
       console.error("Error fetching KDS orders:", err);
     } finally {
@@ -575,6 +646,27 @@ export default function PublicKDS() {
                 {currentTime.toLocaleDateString("pt-BR", { weekday: 'short', day: '2-digit', month: 'short' })}
               </p>
             </div>
+            
+            {/* Sound Toggle */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={cn(
+                soundEnabled
+                  ? "bg-green-600 hover:bg-green-700 text-white border-green-600"
+                  : isDarkMode 
+                    ? "border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" 
+                    : "border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              )}
+              title={soundEnabled ? "Desativar som de novos pedidos" : "Ativar som de novos pedidos"}
+            >
+              {soundEnabled ? (
+                <Volume2 className="h-4 w-4" />
+              ) : (
+                <VolumeX className="h-4 w-4" />
+              )}
+            </Button>
             
             {/* Theme Toggle */}
             <Button
