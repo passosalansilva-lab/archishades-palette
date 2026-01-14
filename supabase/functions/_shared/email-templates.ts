@@ -78,11 +78,19 @@ function camelToSnake(str: string): string {
 }
 
 /**
+ * Converte snake_case para camelCase
+ */
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+/**
  * Substitui variáveis no template HTML.
  * Suporta variáveis nos formatos:
  * - {{variavel}}
  * - {{variavel_snake_case}}
- * - Converte automaticamente camelCase para snake_case
+ * - {{variávelCamelCase}}
+ * - Converte automaticamente entre camelCase e snake_case em ambas as direções
  */
 export function replaceTemplateVariables(
   html: string,
@@ -90,17 +98,41 @@ export function replaceTemplateVariables(
 ): string {
   let result = html;
   
+  // Criar um mapa expandido com todas as variações de cada variável
+  const expandedVariables: Record<string, string> = {};
+  
   for (const [key, value] of Object.entries(variables)) {
-    // Substituir variável no formato original
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-    result = result.replace(regex, String(value));
+    const strValue = String(value);
     
-    // Substituir também no formato snake_case (se o key for camelCase)
+    // Adicionar a variável original
+    expandedVariables[key] = strValue;
+    
+    // Adicionar versão snake_case (se o key for camelCase)
     const snakeKey = camelToSnake(key);
     if (snakeKey !== key) {
-      const snakeRegex = new RegExp(`\\{\\{${snakeKey}\\}\\}`, 'g');
-      result = result.replace(snakeRegex, String(value));
+      expandedVariables[snakeKey] = strValue;
     }
+    
+    // Adicionar versão camelCase (se o key for snake_case)
+    const camelKey = snakeToCamel(key);
+    if (camelKey !== key) {
+      expandedVariables[camelKey] = strValue;
+    }
+  }
+  
+  // Log para debug (pode ser removido depois)
+  console.log("Template variables to replace:", Object.keys(expandedVariables));
+  
+  // Substituir todas as variáveis
+  for (const [key, value] of Object.entries(expandedVariables)) {
+    const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
+    result = result.replace(regex, value);
+  }
+  
+  // Verificar se ainda há variáveis não substituídas e logar
+  const remainingVars = result.match(/\{\{[^}]+\}\}/g);
+  if (remainingVars && remainingVars.length > 0) {
+    console.warn("Variables not replaced in template:", remainingVars);
   }
   
   return result;
