@@ -785,7 +785,7 @@ export default function MenuManagement() {
           <div>
             <h1 className="text-3xl font-display font-bold">Gerenciar Cardápio</h1>
             <p className="text-muted-foreground mt-1">
-              Organize categorias e itens do seu cardápio.
+              Crie categorias, adicione produtos e organize a ordem que aparece para seus clientes.
             </p>
           </div>
           {companySlug && (
@@ -941,6 +941,7 @@ export default function MenuManagement() {
               <Button
                 variant="outline"
                 onClick={() => setBulkImportOpen(true)}
+                title="Importe produtos de uma planilha Excel/CSV"
               >
                 <Upload className="h-4 w-4 mr-1" />
                 Importar
@@ -957,6 +958,7 @@ export default function MenuManagement() {
               <Button
                 variant="outline"
                 onClick={() => setShowDayPeriodsEditor(!showDayPeriodsEditor)}
+                title="Configure horários para exibir categorias específicas (ex: café da manhã, almoço)"
               >
                 <Clock className="h-4 w-4 mr-1" />
                 Períodos
@@ -984,11 +986,35 @@ export default function MenuManagement() {
           )}
 
           {categories.length === 0 ? (
-            <Card>
-              <CardContent className="py-10 flex flex-col items-center gap-3">
-                <p className="text-sm text-muted-foreground text-center max-w-md">
-                  Nenhuma categoria cadastrada ainda. Crie suas categorias antes de adicionar
-                  itens.
+            <Card className="border-dashed">
+              <CardContent className="py-12 flex flex-col items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Plus className="h-8 w-8 text-primary" />
+                </div>
+                <div className="text-center space-y-2 max-w-md">
+                  <h3 className="font-semibold text-lg">Monte seu cardápio digital</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Comece criando suas <strong>categorias</strong> (ex: Lanches, Bebidas, Sobremesas).
+                    Depois, adicione os <strong>produtos</strong> dentro de cada categoria.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                  <Button
+                    onClick={() => {
+                      setCategoryType('normal');
+                      setCategoryDialog({ open: true, category: null });
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Criar primeira categoria
+                  </Button>
+                  <Button variant="outline" onClick={() => setBulkImportOpen(true)}>
+                    <Upload className="h-4 w-4 mr-1" />
+                    Importar de planilha
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-4">
+                  💡 <strong>Dica:</strong> Você pode arrastar categorias e produtos para reorganizar a ordem no cardápio do cliente.
                 </p>
               </CardContent>
             </Card>
@@ -1232,39 +1258,67 @@ export default function MenuManagement() {
                     Escolha se esta categoria será usada para itens comuns ou para pizzas
                     com configurações especiais.
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
-                    <Button
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                    <button
                       type="button"
-                      variant={categoryType === 'normal' ? 'default' : 'outline'}
-                      className="h-auto flex flex-col items-start gap-1 py-3 px-3"
+                      className={cn(
+                        "text-left p-3 rounded-lg border-2 transition-all",
+                        categoryType === 'normal' 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/50"
+                      )}
                       onClick={() => setCategoryType('normal')}
                     >
-                      Item padrão
-                    </Button>
-                    <Button
+                      <p className="font-medium text-sm">🍔 Item padrão</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Lanches, bebidas, sobremesas e itens comuns
+                      </p>
+                    </button>
+                    <button
                       type="button"
-                      variant={categoryType === 'pizza' ? 'default' : 'outline'}
-                      className="h-auto flex flex-col items-start gap-1 py-3 px-3"
+                      className={cn(
+                        "text-left p-3 rounded-lg border-2 transition-all",
+                        categoryType === 'pizza' 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/50"
+                      )}
                       onClick={() => setCategoryType('pizza')}
                     >
-                      Pizza
-                    </Button>
-                    <Button
+                      <p className="font-medium text-sm">🍕 Pizza</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Tamanhos, bordas, sabores e meia/meia
+                      </p>
+                    </button>
+                    <button
                       type="button"
-                      variant={categoryType === 'acai' ? 'default' : 'outline'}
-                      className="h-auto flex flex-col items-start gap-1 py-3 px-3"
+                      className={cn(
+                        "text-left p-3 rounded-lg border-2 transition-all",
+                        categoryType === 'acai' 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/50"
+                      )}
                       onClick={() => setCategoryType('acai')}
                     >
-                      Açaí
-                    </Button>
-                    <Button
+                      <p className="font-medium text-sm">🍇 Açaí</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Tamanhos, complementos e adicionais
+                      </p>
+                    </button>
+                    <button
                       type="button"
-                      variant={categoryType === 'combos' ? 'default' : 'outline'}
-                      className="h-auto flex flex-col items-start gap-1 py-3 px-3"
+                      className={cn(
+                        "text-left p-3 rounded-lg border-2 transition-all",
+                        categoryType === 'combos' 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/50"
+                      )}
                       onClick={() => setCategoryType('combos')}
                     >
-                      Combos
-                    </Button>
+                      <p className="font-medium text-sm">📦 Combos</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Monte promoções com múltiplos itens
+                      </p>
+                    </button>
                   </div>
                 </div>
               )}
