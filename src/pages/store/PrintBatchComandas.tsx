@@ -411,42 +411,46 @@ export default function PrintBatchComandas() {
 
 function ComandaPreviewCard({ number, companyName }: { number: number; companyName: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const barcodeValue = generateComandaBarcode(number);
 
   useEffect(() => {
     if (canvasRef.current) {
       try {
-        const barcodeValue = generateComandaBarcode(number);
         JsBarcode(canvasRef.current, barcodeValue, {
           format: 'CODE128',
-          width: 1.5,
-          height: 30,
+          width: 2,
+          height: 50,
           displayValue: true,
-          fontSize: 10,
-          margin: 2,
+          fontSize: 14,
+          margin: 10,
           background: '#ffffff',
+          lineColor: '#000000',
         });
       } catch (error) {
         console.error('Error generating barcode preview:', error);
       }
     }
-  }, [number]);
+  }, [barcodeValue]);
 
   return (
-    <div className="rounded-lg border-2 border-foreground/20 p-4 text-center">
-      <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-lg border-2 border-foreground/20 bg-white p-4 text-center">
+      <div className="text-xs font-bold uppercase tracking-wide text-gray-600">
         {companyName}
       </div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+      <div className="text-[10px] uppercase tracking-widest text-gray-500">
         COMANDA
       </div>
-      <div className="my-2 rounded bg-foreground px-2 py-1 text-2xl font-bold text-background">
+      <div className="my-2 rounded bg-black px-2 py-1 text-2xl font-bold text-white">
         #{number}
       </div>
-      <canvas ref={canvasRef} className="mx-auto max-w-full" />
-      <div className="mt-1 text-[8px] text-muted-foreground">Escaneie para abrir</div>
-      <div className="mt-2 space-y-2">
+      <div className="my-3 flex justify-center bg-white p-2">
+        <canvas ref={canvasRef} className="max-w-full" />
+      </div>
+      <div className="text-[10px] text-gray-500">Valor: <strong>{barcodeValue}</strong></div>
+      <div className="mt-1 text-[8px] text-gray-400">Escaneie para abrir esta comanda</div>
+      <div className="mt-3 space-y-2">
         {[1, 2, 3].map((line) => (
-          <div key={line} className="h-4 border-b border-dashed border-muted-foreground/30" />
+          <div key={line} className="h-4 border-b border-dashed border-gray-300" />
         ))}
       </div>
     </div>
