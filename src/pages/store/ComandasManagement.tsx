@@ -1194,91 +1194,187 @@ export default function ComandasManagement() {
 
       {/* Add Items Dialog */}
       <Dialog open={showAddItems} onOpenChange={setShowAddItems}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Adicionar Itens - Comanda #{selectedComanda?.number}</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 flex gap-4 overflow-hidden">
-            {/* Products */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar produto..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className="pl-9"
-                />
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          {/* Header */}
+          <div className="px-6 py-4 border-b bg-gradient-to-r from-primary/5 to-transparent">
+            <DialogTitle className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <ShoppingBag className="h-5 w-5 text-primary" />
               </div>
-              <div className="flex gap-2 mb-3 flex-wrap">
-                <Button
-                  variant={selectedCategory === null ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedCategory(null)}
-                >
-                  Todos
-                </Button>
-                {categories.map((cat) => (
-                  <Button
-                    key={cat.id}
-                    variant={selectedCategory === cat.id ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedCategory(cat.id)}
-                  >
-                    {cat.name}
-                  </Button>
-                ))}
+              <div>
+                <span className="text-xl">Adicionar Itens</span>
+                <p className="text-sm text-muted-foreground font-normal">
+                  Comanda #{selectedComanda?.number}
+                  {selectedComanda?.customer_name && ` • ${selectedComanda.customer_name}`}
+                </p>
               </div>
+            </DialogTitle>
+          </div>
+
+          <div className="flex-1 flex overflow-hidden">
+            {/* Products Section */}
+            <div className="flex-1 flex flex-col overflow-hidden p-4">
+              {/* Search and Categories */}
+              <div className="space-y-3 mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar produto..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="pl-9 h-11"
+                  />
+                </div>
+                <ScrollArea className="w-full whitespace-nowrap">
+                  <div className="flex gap-2 pb-2">
+                    <Button
+                      variant={selectedCategory === null ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedCategory(null)}
+                      className="rounded-full"
+                    >
+                      Todos
+                    </Button>
+                    {categories.map((cat) => (
+                      <Button
+                        key={cat.id}
+                        variant={selectedCategory === cat.id ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className="rounded-full"
+                      >
+                        {cat.name}
+                      </Button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              {/* Products Grid */}
               <ScrollArea className="flex-1">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pr-4">
                   {filteredProducts.map((product) => (
                     <Card
                       key={product.id}
-                      className="cursor-pointer hover:bg-accent/50 transition-colors"
+                      className="cursor-pointer group hover:shadow-lg hover:border-primary/50 transition-all duration-200 overflow-hidden"
                       onClick={() => openProductModal(product)}
                     >
+                      {/* Product Image */}
+                      <div className="aspect-square relative bg-muted overflow-hidden">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted-foreground/10">
+                            <ShoppingBag className="h-10 w-10 text-muted-foreground/30" />
+                          </div>
+                        )}
+                        {/* Quick add overlay */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="bg-white rounded-full p-2 shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
+                            <Plus className="h-5 w-5 text-primary" />
+                          </div>
+                        </div>
+                      </div>
+                      {/* Product Info */}
                       <CardContent className="p-3">
-                        <p className="font-medium text-sm line-clamp-2">{product.name}</p>
-                        <p className="text-sm text-primary font-medium mt-1">
+                        <p className="font-medium text-sm line-clamp-2 min-h-[2.5rem]">
+                          {product.name}
+                        </p>
+                        <p className="text-base text-primary font-bold mt-1">
                           {formatCurrency(product.price)}
                         </p>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
+                {filteredProducts.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Search className="h-12 w-12 mb-3 opacity-30" />
+                    <p>Nenhum produto encontrado</p>
+                  </div>
+                )}
               </ScrollArea>
             </div>
 
-            {/* Cart */}
-            <div className="w-72 border-l pl-4 flex flex-col">
-              <h3 className="font-medium mb-3">Itens a adicionar</h3>
-              <ScrollArea className="flex-1">
+            {/* Cart Sidebar */}
+            <div className="w-80 border-l bg-muted/30 flex flex-col">
+              {/* Cart Header */}
+              <div className="p-4 border-b bg-background">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-primary" />
+                  Itens Selecionados
+                  {cart.length > 0 && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                    </Badge>
+                  )}
+                </h3>
+              </div>
+
+              {/* Cart Items */}
+              <ScrollArea className="flex-1 p-4">
                 {cart.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Nenhum item selecionado
-                  </p>
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-3">
+                      <ShoppingBag className="h-8 w-8 opacity-30" />
+                    </div>
+                    <p className="text-sm text-center">
+                      Clique nos produtos para adicionar à comanda
+                    </p>
+                  </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {cart.map((item, index) => (
-                      <Card key={index}>
-                        <CardContent className="p-2">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">
-                                {item.quantity}x {item.product.name}
-                              </p>
-                              <p className="text-xs text-primary">
+                      <Card key={index} className="overflow-hidden">
+                        <CardContent className="p-0">
+                          <div className="flex gap-3">
+                            {/* Item Image */}
+                            <div className="w-16 h-16 flex-shrink-0 bg-muted">
+                              {item.product.image_url ? (
+                                <img
+                                  src={item.product.image_url}
+                                  alt={item.product.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <ShoppingBag className="h-5 w-5 text-muted-foreground/30" />
+                                </div>
+                              )}
+                            </div>
+                            {/* Item Info */}
+                            <div className="flex-1 py-2 pr-2">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium line-clamp-1">
+                                    {item.product.name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {item.quantity}x {formatCurrency(item.calculatedPrice)}
+                                  </p>
+                                  {item.options.length > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                      {item.options.map(o => o.name).join(', ')}
+                                    </p>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  onClick={() => setCart((prev) => prev.filter((_, i) => i !== index))}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              <p className="text-sm font-bold text-primary mt-1">
                                 {formatCurrency(item.calculatedPrice * item.quantity)}
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => setCart((prev) => prev.filter((_, i) => i !== index))}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -1286,23 +1382,32 @@ export default function ComandasManagement() {
                   </div>
                 )}
               </ScrollArea>
-              <Separator className="my-3" />
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-medium">Total</span>
-                <span className="font-bold text-primary">{formatCurrency(cartTotal)}</span>
+
+              {/* Cart Footer */}
+              <div className="p-4 border-t bg-background space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">{formatCurrency(cartTotal)}</span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-semibold">Total</span>
+                  <span className="text-xl font-bold text-primary">{formatCurrency(cartTotal)}</span>
+                </div>
+                <Button
+                  onClick={handleAddItemsToComanda}
+                  disabled={cart.length === 0 || addingItems}
+                  className="w-full h-12 text-base"
+                  size="lg"
+                >
+                  {addingItems ? (
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  ) : (
+                    <Check className="h-5 w-5 mr-2" />
+                  )}
+                  Confirmar Itens
+                </Button>
               </div>
-              <Button
-                onClick={handleAddItemsToComanda}
-                disabled={cart.length === 0 || addingItems}
-                className="w-full"
-              >
-                {addingItems ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                Adicionar à Comanda
-              </Button>
             </div>
           </div>
         </DialogContent>
