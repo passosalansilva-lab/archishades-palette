@@ -83,6 +83,7 @@ export function ProductPizzaSettings({
   const [newDough, setNewDough] = useState({ name: '', extra_price: 0 });
   const [newCrustType, setNewCrustType] = useState('');
   const [newCrustFlavor, setNewCrustFlavor] = useState({ name: '', type_id: '', extra_price: 0 });
+  const [editingCrustFlavor, setEditingCrustFlavor] = useState<PizzaCrustFlavor | null>(null);
   
   // Saving states
   const [savingSizes, setSavingSizes] = useState(false);
@@ -281,6 +282,19 @@ export function ProductPizzaSettings({
       toast({ title: 'Erro ao adicionar', description: error.message, variant: 'destructive' });
     } finally {
       setSavingCrusts(false);
+    }
+  };
+
+  const updateCrustFlavor = async (id: string, updates: Partial<PizzaCrustFlavor>) => {
+    try {
+      const { error } = await supabase.from('pizza_crust_flavors').update(updates).eq('id', id);
+      if (error) throw error;
+      
+      setCrustFlavors(crustFlavors.map(f => f.id === id ? { ...f, ...updates } : f));
+      setEditingCrustFlavor(null);
+      toast({ title: 'Borda atualizada' });
+    } catch (error: any) {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -595,28 +609,76 @@ export function ProductPizzaSettings({
               {/* List of existing crusts */}
               {crustTypes.length > 0 && (
                 <div className="space-y-3 pt-2 border-t">
-                  <p className="text-sm font-medium text-muted-foreground">Bordas cadastradas:</p>
+                  <p className="text-sm font-medium text-muted-foreground">Bordas cadastradas (clique para editar):</p>
                   {crustTypes.map(type => (
-                    <div key={type.id} className="space-y-1">
+                    <div key={type.id} className="space-y-2">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">{type.name}</Badge>
                         <span className="text-xs text-muted-foreground">
                           ({crustFlavors.filter(f => f.type_id === type.id).length} sabores)
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-1 pl-2">
+                      <div className="space-y-1 pl-2">
                         {crustFlavors.filter(f => f.type_id === type.id).map(flavor => (
-                          <div key={flavor.id} className="flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-xs">
-                            <span>{flavor.name}</span>
-                            {flavor.extra_price > 0 && (
-                              <span className="text-muted-foreground">+R${flavor.extra_price.toFixed(2)}</span>
+                          <div key={flavor.id}>
+                            {editingCrustFlavor?.id === flavor.id ? (
+                              <div className="flex items-center gap-2 p-2 rounded-md border bg-background">
+                                <Input
+                                  value={editingCrustFlavor.name}
+                                  onChange={(e) => setEditingCrustFlavor({ ...editingCrustFlavor, name: e.target.value })}
+                                  className="flex-1 h-8 text-sm"
+                                  placeholder="Nome do sabor"
+                                />
+                                <div className="w-24">
+                                  <CurrencyInput
+                                    value={editingCrustFlavor.extra_price}
+                                    onChange={(v) => setEditingCrustFlavor({ ...editingCrustFlavor, extra_price: parseFloat(String(v)) || 0 })}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                                <Button 
+                                  size="sm" 
+                                  className="h-8"
+                                  onClick={() => updateCrustFlavor(flavor.id, { 
+                                    name: editingCrustFlavor.name, 
+                                    extra_price: editingCrustFlavor.extra_price 
+                                  })}
+                                >
+                                  Salvar
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-8"
+                                  onClick={() => setEditingCrustFlavor(null)}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            ) : (
+                              <div 
+                                className="flex items-center justify-between p-2 rounded-md border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => setEditingCrustFlavor(flavor)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">{flavor.name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {flavor.extra_price > 0 ? `+R$ ${flavor.extra_price.toFixed(2)}` : 'Grátis'}
+                                  </span>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteCrustFlavor(flavor.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </Button>
+                              </div>
                             )}
-                            <button 
-                              onClick={() => deleteCrustFlavor(flavor.id)}
-                              className="ml-1 text-destructive hover:text-destructive/80"
-                            >
-                              ×
-                            </button>
                           </div>
                         ))}
                         {crustFlavors.filter(f => f.type_id === type.id).length === 0 && (
