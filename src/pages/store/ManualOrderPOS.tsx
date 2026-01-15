@@ -386,8 +386,8 @@ export default function ManualOrderPOS() {
       return;
     }
 
-    // Only require customer data for delivery
-    if (deliveryType === 'delivery') {
+    // Require customer data for delivery and pickup
+    if (deliveryType === 'delivery' || deliveryType === 'pickup') {
       if (!customer.name.trim()) {
         toast({ title: 'Informe o nome do cliente', variant: 'destructive' });
         return;
@@ -397,7 +397,9 @@ export default function ManualOrderPOS() {
         toast({ title: 'Informe o telefone do cliente', variant: 'destructive' });
         return;
       }
+    }
 
+    if (deliveryType === 'delivery') {
       if (!address.street.trim() || !address.number.trim() || !address.neighborhood.trim() || !address.city.trim() || !address.state.trim()) {
         toast({ title: 'Preencha o endereço completo', variant: 'destructive' });
         return;
@@ -729,8 +731,8 @@ export default function ManualOrderPOS() {
 
                 <Separator />
 
-                {/* Customer data (only for delivery) */}
-                {deliveryType === 'delivery' && (
+                {/* Customer data (for delivery and pickup) */}
+                {(deliveryType === 'delivery' || deliveryType === 'pickup') && (
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <User className="h-4 w-4" />
@@ -766,7 +768,7 @@ export default function ManualOrderPOS() {
                   </div>
                 )}
 
-                {deliveryType === 'delivery' && <Separator />}
+                {(deliveryType === 'delivery' || deliveryType === 'pickup') && <Separator />}
 
                 {/* Delivery type */}
                 <div>
