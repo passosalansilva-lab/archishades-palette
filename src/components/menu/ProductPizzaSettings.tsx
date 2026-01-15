@@ -435,7 +435,7 @@ export function ProductPizzaSettings({
             <TabsContent value="sizes" className="space-y-3 mt-3">
               {/* Header labels */}
               <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
-                <span className="w-24">Tamanho</span>
+                <span className="flex-1 min-w-[80px]">Tamanho</span>
                 <span className="w-24 text-center">Preço</span>
                 <span className="w-14 text-center">Fatias</span>
                 <span className="w-14 text-center">Sabores</span>
@@ -449,8 +449,8 @@ export function ProductPizzaSettings({
                       <Input
                         value={size.name}
                         onChange={(e) => updateSize(size.id, { name: e.target.value })}
-                        className="w-24 h-8 text-sm"
-                        placeholder="Ex: G"
+                        className="flex-1 min-w-[80px] h-8 text-sm"
+                        placeholder="Ex: Grande"
                       />
                       <div className="w-24">
                         <CurrencyInput
@@ -487,8 +487,8 @@ export function ProductPizzaSettings({
                 <Input
                   value={newSize.name}
                   onChange={(e) => setNewSize(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: G"
-                  className="w-24 h-8 text-sm"
+                  placeholder="Ex: Grande"
+                  className="flex-1 min-w-[80px] h-8 text-sm"
                 />
                 <div className="w-24">
                   <CurrencyInput
