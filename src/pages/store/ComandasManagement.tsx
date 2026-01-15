@@ -398,7 +398,7 @@ export default function ComandasManagement() {
 
       if (error) {
         if (error.code === '23505') {
-          toast({ title: 'Esse número de comanda já está em uso hoje', variant: 'destructive' });
+          toast({ title: 'Esse número de comanda já está em uso (aberta)', variant: 'destructive' });
           setCreatingComanda(false);
           return;
         }
@@ -510,10 +510,16 @@ export default function ComandasManagement() {
 
       if (error) throw error;
 
+      // If this comanda was created from a generated card, free the card for reuse
+      await (supabase as any)
+        .from('generated_comandas')
+        .update({ used_at: null, comanda_id: null })
+        .eq('comanda_id', selectedComanda.id);
+
       const methodLabel = paymentMethod === 'dinheiro' ? 'Dinheiro' : paymentMethod === 'cartao' ? 'Cartão' : 'PIX';
-      toast({ 
+      toast({
         title: `Comanda #${selectedComanda.number} fechada`,
-        description: `Pagamento: ${methodLabel}${changeAmount > 0 ? ` - Troco: R$ ${changeAmount.toFixed(2).replace('.', ',')}` : ''}`
+        description: `Pagamento: ${methodLabel}${changeAmount > 0 ? ` - Troco: R$ ${changeAmount.toFixed(2).replace('.', ',')}` : ''}`,
       });
       setShowCloseDialog(false);
       setSelectedComanda(null);
@@ -538,6 +544,12 @@ export default function ComandasManagement() {
         .eq('id', selectedComanda.id);
 
       if (error) throw error;
+
+      // If this comanda was created from a generated card, free the card for reuse
+      await (supabase as any)
+        .from('generated_comandas')
+        .update({ used_at: null, comanda_id: null })
+        .eq('comanda_id', selectedComanda.id);
 
       toast({ title: `Comanda #${selectedComanda.number} cancelada` });
       setShowCancelDialog(false);
