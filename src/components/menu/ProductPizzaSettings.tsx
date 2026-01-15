@@ -396,6 +396,15 @@ export function ProductPizzaSettings({
 
             {/* Sizes Tab */}
             <TabsContent value="sizes" className="space-y-3 mt-3">
+              {/* Header labels */}
+              <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
+                <span className="flex-1">Tamanho</span>
+                <span className="w-20 text-center">Preço</span>
+                <span className="w-14 text-center">Fatias</span>
+                <span className="w-14 text-center">Sabores</span>
+                <span className="w-8"></span>
+              </div>
+              
               {sizes.length > 0 && (
                 <div className="space-y-2">
                   {sizes.map(size => (
@@ -404,9 +413,9 @@ export function ProductPizzaSettings({
                         value={size.name}
                         onChange={(e) => updateSize(size.id, { name: e.target.value })}
                         className="flex-1 h-8 text-sm"
-                        placeholder="Nome"
+                        placeholder="Ex: Grande"
                       />
-                      <div className="w-24">
+                      <div className="w-20">
                         <CurrencyInput
                           value={size.base_price}
                           onChange={(v) => updateSize(size.id, { base_price: parseFloat(String(v)) || 0 })}
@@ -415,10 +424,19 @@ export function ProductPizzaSettings({
                       </div>
                       <Input
                         type="number"
+                        min={1}
+                        value={size.slices}
+                        onChange={(e) => updateSize(size.id, { slices: parseInt(e.target.value) || 8 })}
+                        className="w-14 h-8 text-sm text-center"
+                        placeholder="8"
+                      />
+                      <Input
+                        type="number"
+                        min={1}
+                        max={4}
                         value={size.max_flavors}
                         onChange={(e) => updateSize(size.id, { max_flavors: parseInt(e.target.value) || 1 })}
-                        className="w-16 h-8 text-sm text-center"
-                        title="Máx. sabores"
+                        className="w-14 h-8 text-sm text-center"
                       />
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteSize(size.id)}>
                         <Trash2 className="h-3 w-3 text-destructive" />
@@ -435,26 +453,36 @@ export function ProductPizzaSettings({
                   placeholder="Ex: Grande"
                   className="flex-1 h-8 text-sm"
                 />
-                <div className="w-24">
+                <div className="w-20">
                   <CurrencyInput
                     value={newSize.base_price}
                     onChange={(v) => setNewSize(prev => ({ ...prev, base_price: parseFloat(String(v)) || 0 }))}
                     className="h-8 text-sm"
-                    placeholder="Preço"
                   />
                 </div>
                 <Input
                   type="number"
+                  min={1}
+                  value={newSize.slices}
+                  onChange={(e) => setNewSize(prev => ({ ...prev, slices: parseInt(e.target.value) || 8 }))}
+                  className="w-14 h-8 text-sm text-center"
+                  placeholder="8"
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  max={4}
                   value={newSize.max_flavors}
                   onChange={(e) => setNewSize(prev => ({ ...prev, max_flavors: parseInt(e.target.value) || 1 }))}
-                  className="w-16 h-8 text-sm text-center"
-                  title="Máx. sabores"
+                  className="w-14 h-8 text-sm text-center"
                 />
                 <Button size="sm" onClick={addSize} disabled={savingSizes || !newSize.name.trim()} className="h-8">
                   {savingSizes ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Preço base • Máx. sabores por tamanho</p>
+              <p className="text-xs text-muted-foreground">
+                <strong>Fatias:</strong> quantidade de pedaços • <strong>Sabores:</strong> máx. para meio a meio
+              </p>
             </TabsContent>
 
             {/* Doughs Tab */}
