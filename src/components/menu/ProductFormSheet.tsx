@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Package, Check } from 'lucide-react';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { ProductRecipeEditor } from '@/components/inventory/ProductRecipeEditor';
 import { ProductIngredientsEditor } from '@/components/menu/ProductIngredientsEditor';
@@ -1039,14 +1039,18 @@ export function ProductFormSheet({
                 {step === 2 && ' - Adicionais'}
               </span>
             </SheetTitle>
-            {/* Step indicator - clickable tabs */}
+            {/* Step indicator - clickable tabs with progress */}
             <div className="flex items-center gap-2 mt-2">
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors cursor-pointer ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-colors cursor-pointer ${step === 1 ? 'bg-primary text-primary-foreground' : currentProductId ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
               >
-                <span className="font-semibold">1</span>
+                {currentProductId && step !== 1 ? (
+                  <Check className="h-3 w-3" />
+                ) : (
+                  <span className="font-semibold">1</span>
+                )}
                 <span>Dados do produto</span>
               </button>
               <ArrowRight className="h-3 w-3 text-muted-foreground" />
@@ -1054,10 +1058,14 @@ export function ProductFormSheet({
                 type="button"
                 onClick={() => currentProductId && goToStep2()}
                 disabled={!currentProductId}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'} ${currentProductId ? 'cursor-pointer hover:bg-muted/80' : 'opacity-50 cursor-not-allowed'}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-colors ${step === 2 ? 'bg-primary text-primary-foreground' : groups.length > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 cursor-pointer' : currentProductId ? 'bg-muted text-muted-foreground cursor-pointer hover:bg-muted/80' : 'bg-muted text-muted-foreground opacity-50 cursor-not-allowed'}`}
                 title={!currentProductId ? 'Salve os dados do produto primeiro' : 'Ir para Adicionais'}
               >
-                <span className="font-semibold">2</span>
+                {groups.length > 0 && step !== 2 ? (
+                  <Check className="h-3 w-3" />
+                ) : (
+                  <span className="font-semibold">2</span>
+                )}
                 <span>Adicionais</span>
               </button>
             </div>
