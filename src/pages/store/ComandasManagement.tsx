@@ -338,20 +338,17 @@ export default function ComandasManagement() {
 
       if (genError) throw genError;
 
-      // Get today's open comandas to filter out
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const { data: todaysComandas } = await (supabase as any)
+      // Get currently OPEN comandas only (closed ones are reusable!)
+      const { data: openComandas } = await (supabase as any)
         .from('comandas')
         .select('number')
         .eq('company_id', companyId)
-        .gte('created_at', today.toISOString());
+        .eq('status', 'open');
 
-      const usedNumbers = new Set((todaysComandas || []).map((c: any) => c.number));
+      const openNumbers = new Set((openComandas || []).map((c: any) => c.number));
       
-      // Filter out numbers already in use today
-      const available = (generated || []).filter((g: any) => !usedNumbers.has(g.number));
+      // Filter out numbers that are currently open
+      const available = (generated || []).filter((g: any) => !openNumbers.has(g.number));
       
       setAvailableComandas(available);
     } catch (error: any) {
@@ -516,6 +513,7 @@ export default function ComandasManagement() {
       setShowCloseDialog(false);
       setSelectedComanda(null);
       loadComandas();
+      loadAvailableComandas(); // Refresh available list - closed comanda is now reusable
     } catch (error: any) {
       console.error('Error closing comanda:', error);
       toast({ title: 'Erro ao fechar comanda', description: error.message, variant: 'destructive' });
@@ -540,6 +538,7 @@ export default function ComandasManagement() {
       setShowCancelDialog(false);
       setSelectedComanda(null);
       loadComandas();
+      loadAvailableComandas(); // Refresh available list - cancelled comanda is now reusable
     } catch (error: any) {
       console.error('Error cancelling comanda:', error);
       toast({ title: 'Erro ao cancelar comanda', description: error.message, variant: 'destructive' });
