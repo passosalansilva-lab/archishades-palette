@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Plus, Trash2, Pizza } from 'lucide-react';
+import { Loader2, Plus, Trash2, Pizza, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -310,6 +311,28 @@ export function ProductPizzaSettings({
     }
   };
 
+  const deleteCrustType = async (id: string) => {
+    try {
+      // First check if there are flavors for this type
+      const flavorsOfType = crustFlavors.filter(f => f.type_id === id);
+      
+      // Deactivate all flavors of this type
+      for (const flavor of flavorsOfType) {
+        await supabase.from('pizza_crust_flavors').update({ active: false }).eq('id', flavor.id);
+      }
+      
+      // Deactivate the crust type
+      const { error } = await supabase.from('pizza_crust_types').update({ active: false }).eq('id', id);
+      if (error) throw error;
+      
+      setCrustTypes(crustTypes.filter(t => t.id !== id));
+      setCrustFlavors(crustFlavors.filter(f => f.type_id !== id));
+      toast({ title: 'Tipo de borda removido' });
+    } catch (error: any) {
+      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+    }
+  };
+
   // Settings management
   const saveSettings = async () => {
     if (!categorySettings) return;
@@ -541,159 +564,156 @@ export function ProductPizzaSettings({
 
             {/* Crusts Tab */}
             <TabsContent value="crusts" className="space-y-4 mt-3">
-              {/* Explanation */}
-              <div className="p-3 rounded-md bg-muted/50 border">
-                <p className="text-sm font-medium mb-1">Como funciona:</p>
-                <p className="text-xs text-muted-foreground">
-                  1. Crie um <strong>tipo de borda</strong> (ex: "Recheada", "Tradicional")<br/>
-                  2. Adicione os <strong>sabores</strong> para cada tipo (ex: "Catupiry", "Cheddar")
-                </p>
+              {/* Add new crust type */}
+              <div className="flex items-center gap-2 p-2 rounded-md border border-dashed">
+                <Input
+                  value={newCrustType}
+                  onChange={(e) => setNewCrustType(e.target.value)}
+                  placeholder="Novo tipo de borda (ex: Recheada, Vulcão)"
+                  className="flex-1 h-9 text-sm"
+                />
+                <Button onClick={addCrustType} disabled={savingCrusts || !newCrustType.trim()} className="h-9">
+                  {savingCrusts ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                  Criar tipo
+                </Button>
               </div>
 
-              {/* Step 1: Add crust type */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">1. Criar tipo de borda</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={newCrustType}
-                    onChange={(e) => setNewCrustType(e.target.value)}
-                    placeholder="Ex: Recheada, Tradicional, Vulcão"
-                    className="flex-1 h-9 text-sm"
-                  />
-                  <Button onClick={addCrustType} disabled={savingCrusts || !newCrustType.trim()} className="h-9">
-                    {savingCrusts ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                    Criar tipo
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Step 2: Add flavors to types */}
-              {crustTypes.length > 0 && (
+              {/* List of crust types with collapsible flavors */}
+              {crustTypes.length > 0 ? (
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">2. Adicionar sabor de borda</Label>
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={newCrustFlavor.type_id}
-                      onValueChange={(v) => setNewCrustFlavor(prev => ({ ...prev, type_id: v }))}
-                    >
-                      <SelectTrigger className="w-32 h-9 text-sm">
-                        <SelectValue placeholder="Tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {crustTypes.map(t => (
-                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      value={newCrustFlavor.name}
-                      onChange={(e) => setNewCrustFlavor(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Ex: Catupiry, Cheddar"
-                      className="flex-1 h-9 text-sm"
-                    />
-                    <div className="w-24">
-                      <CurrencyInput
-                        value={newCrustFlavor.extra_price}
-                        onChange={(v) => setNewCrustFlavor(prev => ({ ...prev, extra_price: parseFloat(String(v)) || 0 }))}
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                    <Button onClick={addCrustFlavor} disabled={savingCrusts || !newCrustFlavor.name.trim() || !newCrustFlavor.type_id} className="h-9">
-                      {savingCrusts ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Preço adicional cobrado pela borda</p>
-                </div>
-              )}
-
-              {/* List of existing crusts */}
-              {crustTypes.length > 0 && (
-                <div className="space-y-3 pt-2 border-t">
-                  <p className="text-sm font-medium text-muted-foreground">Bordas cadastradas (clique para editar):</p>
-                  {crustTypes.map(type => (
-                    <div key={type.id} className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">{type.name}</Badge>
-                        <span className="text-xs text-muted-foreground">
-                          ({crustFlavors.filter(f => f.type_id === type.id).length} sabores)
-                        </span>
-                      </div>
-                      <div className="space-y-1 pl-2">
-                        {crustFlavors.filter(f => f.type_id === type.id).map(flavor => (
-                          <div key={flavor.id}>
-                            {editingCrustFlavor?.id === flavor.id ? (
-                              <div className="flex items-center gap-2 p-2 rounded-md border bg-background">
-                                <Input
-                                  value={editingCrustFlavor.name}
-                                  onChange={(e) => setEditingCrustFlavor({ ...editingCrustFlavor, name: e.target.value })}
-                                  className="flex-1 h-8 text-sm"
-                                  placeholder="Nome do sabor"
+                  {crustTypes.map(type => {
+                    const typeFlavors = crustFlavors.filter(f => f.type_id === type.id);
+                    return (
+                      <Collapsible key={type.id} className="border rounded-lg">
+                        <CollapsibleTrigger className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center gap-2">
+                            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                            <span className="font-medium text-sm">{type.name}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {typeFlavors.length} {typeFlavors.length === 1 ? 'sabor' : 'sabores'}
+                            </Badge>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteCrustType(type.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="border-t bg-muted/20">
+                          <div className="p-3 space-y-3">
+                            {/* Add new flavor to this type */}
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={newCrustFlavor.type_id === type.id ? newCrustFlavor.name : ''}
+                                onChange={(e) => setNewCrustFlavor({ type_id: type.id, name: e.target.value, extra_price: newCrustFlavor.type_id === type.id ? newCrustFlavor.extra_price : 0 })}
+                                placeholder="Nome do sabor (ex: Catupiry)"
+                                className="flex-1 h-8 text-sm"
+                                onFocus={() => setNewCrustFlavor(prev => ({ ...prev, type_id: type.id }))}
+                              />
+                              <div className="w-24">
+                                <CurrencyInput
+                                  value={newCrustFlavor.type_id === type.id ? newCrustFlavor.extra_price : 0}
+                                  onChange={(v) => setNewCrustFlavor({ type_id: type.id, name: newCrustFlavor.type_id === type.id ? newCrustFlavor.name : '', extra_price: parseFloat(String(v)) || 0 })}
+                                  className="h-8 text-sm"
+                                  placeholder="+ Preço"
                                 />
-                                <div className="w-24">
-                                  <CurrencyInput
-                                    value={editingCrustFlavor.extra_price}
-                                    onChange={(v) => setEditingCrustFlavor({ ...editingCrustFlavor, extra_price: parseFloat(String(v)) || 0 })}
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-                                <Button 
-                                  size="sm" 
-                                  className="h-8"
-                                  onClick={() => updateCrustFlavor(flavor.id, { 
-                                    name: editingCrustFlavor.name, 
-                                    extra_price: editingCrustFlavor.extra_price 
-                                  })}
-                                >
-                                  Salvar
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="h-8"
-                                  onClick={() => setEditingCrustFlavor(null)}
-                                >
-                                  Cancelar
-                                </Button>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                onClick={addCrustFlavor} 
+                                disabled={savingCrusts || !newCrustFlavor.name.trim() || newCrustFlavor.type_id !== type.id} 
+                                className="h-8"
+                              >
+                                {savingCrusts ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                              </Button>
+                            </div>
+
+                            {/* List flavors for this type */}
+                            {typeFlavors.length > 0 ? (
+                              <div className="space-y-1">
+                                {typeFlavors.map(flavor => (
+                                  <div key={flavor.id}>
+                                    {editingCrustFlavor?.id === flavor.id ? (
+                                      <div className="flex items-center gap-2 p-2 rounded-md border bg-background">
+                                        <Input
+                                          value={editingCrustFlavor.name}
+                                          onChange={(e) => setEditingCrustFlavor({ ...editingCrustFlavor, name: e.target.value })}
+                                          className="flex-1 h-8 text-sm"
+                                        />
+                                        <div className="w-24">
+                                          <CurrencyInput
+                                            value={editingCrustFlavor.extra_price}
+                                            onChange={(v) => setEditingCrustFlavor({ ...editingCrustFlavor, extra_price: parseFloat(String(v)) || 0 })}
+                                            className="h-8 text-sm"
+                                          />
+                                        </div>
+                                        <Button 
+                                          size="sm" 
+                                          className="h-8"
+                                          onClick={() => updateCrustFlavor(flavor.id, { 
+                                            name: editingCrustFlavor.name, 
+                                            extra_price: editingCrustFlavor.extra_price 
+                                          })}
+                                        >
+                                          Salvar
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          variant="ghost" 
+                                          className="h-8"
+                                          onClick={() => setEditingCrustFlavor(null)}
+                                        >
+                                          Cancelar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div 
+                                        className="flex items-center justify-between p-2 rounded-md bg-background/50 hover:bg-background cursor-pointer transition-colors"
+                                        onClick={() => setEditingCrustFlavor(flavor)}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm">{flavor.name}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {flavor.extra_price > 0 ? `+R$ ${flavor.extra_price.toFixed(2)}` : 'Grátis'}
+                                          </span>
+                                        </div>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-6 w-6"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteCrustFlavor(flavor.id);
+                                          }}
+                                        >
+                                          <Trash2 className="h-3 w-3 text-destructive" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                             ) : (
-                              <div 
-                                className="flex items-center justify-between p-2 rounded-md border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
-                                onClick={() => setEditingCrustFlavor(flavor)}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm">{flavor.name}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {flavor.extra_price > 0 ? `+R$ ${flavor.extra_price.toFixed(2)}` : 'Grátis'}
-                                  </span>
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteCrustFlavor(flavor.id);
-                                  }}
-                                >
-                                  <Trash2 className="h-3 w-3 text-destructive" />
-                                </Button>
-                              </div>
+                              <p className="text-xs text-muted-foreground text-center py-2">
+                                Adicione sabores para esta borda acima
+                              </p>
                             )}
                           </div>
-                        ))}
-                        {crustFlavors.filter(f => f.type_id === type.id).length === 0 && (
-                          <span className="text-xs text-muted-foreground italic">Nenhum sabor cadastrado</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    );
+                  })}
                 </div>
-              )}
-
-              {crustTypes.length === 0 && (
-                <div className="text-center py-4 text-muted-foreground">
+              ) : (
+                <div className="text-center py-6 text-muted-foreground border rounded-lg bg-muted/20">
                   <p className="text-sm">Nenhum tipo de borda cadastrado</p>
-                  <p className="text-xs">Comece criando um tipo acima</p>
+                  <p className="text-xs">Crie um tipo acima para começar</p>
                 </div>
               )}
             </TabsContent>
