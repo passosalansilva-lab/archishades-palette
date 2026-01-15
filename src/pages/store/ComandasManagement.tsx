@@ -16,12 +16,15 @@ import {
   Loader2,
   Receipt,
   Hash,
+  Printer,
+  ShoppingBag,
+  Calendar,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -41,6 +44,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -53,9 +57,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { POSProductModal, SelectedOption } from '@/components/pos/POSProductModal';
+import { PrintComanda } from '@/components/comandas/PrintComanda';
 
 interface Comanda {
   id: string;
@@ -115,6 +119,7 @@ export default function ComandasManagement() {
   const { toast } = useToast();
 
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [comandas, setComandas] = useState<Comanda[]>([]);
   const [selectedComanda, setSelectedComanda] = useState<Comanda | null>(null);
@@ -199,8 +204,8 @@ export default function ComandasManagement() {
     setLoading(true);
     try {
       const companyQuery = staffCompany?.companyId
-        ? supabase.from('companies').select('id').eq('id', staffCompany.companyId).maybeSingle()
-        : supabase.from('companies').select('id').eq('owner_id', user.id).maybeSingle();
+        ? supabase.from('companies').select('id, name').eq('id', staffCompany.companyId).maybeSingle()
+        : supabase.from('companies').select('id, name').eq('owner_id', user.id).maybeSingle();
 
       const { data: company, error } = await companyQuery;
       if (error) throw error;
@@ -211,6 +216,7 @@ export default function ComandasManagement() {
       }
 
       setCompanyId(company.id);
+      setCompanyName(company.name || 'Estabelecimento');
     } catch (error: any) {
       console.error('Error loading data:', error);
       toast({ title: 'Erro ao carregar dados', description: error.message, variant: 'destructive' });
@@ -531,60 +537,130 @@ export default function ComandasManagement() {
     );
   }
 
+  // Calculate stats
+  const openComandas = comandas.filter((c) => c.status === 'open');
+  const totalOpenValue = openComandas.reduce((sum, c) => sum + c.total, 0);
+  const todayClosedValue = comandas
+    .filter((c) => c.status === 'closed' && c.closed_at && new Date(c.closed_at).toDateString() === new Date().toDateString())
+    .reduce((sum, c) => sum + c.total, 0);
+
   return (
     <DashboardLayout>
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border-b">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Receipt className="h-6 w-6" />
-              Comandas
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              Gerencie as comandas do estabelecimento
-            </p>
+        <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-transparent">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Receipt className="h-6 w-6 text-primary" />
+                Comandas
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                Gerencie as comandas do estabelecimento
+              </p>
+            </div>
+            <Button onClick={() => setShowNewDialog(true)} size="lg" className="gap-2">
+              <Plus className="h-5 w-5" />
+              Nova Comanda
+            </Button>
           </div>
-          <Button onClick={() => setShowNewDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Comanda
-          </Button>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="bg-background/60 backdrop-blur">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-green-500/10">
+                    <Receipt className="h-4 w-4 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Abertas</p>
+                    <p className="text-xl font-bold">{openComandas.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-background/60 backdrop-blur">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-primary/10">
+                    <DollarSign className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Em Aberto</p>
+                    <p className="text-xl font-bold">{formatCurrency(totalOpenValue)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-background/60 backdrop-blur">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-blue-500/10">
+                    <Check className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fechadas Hoje</p>
+                    <p className="text-xl font-bold">{formatCurrency(todayClosedValue)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-background/60 backdrop-blur">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-full bg-amber-500/10">
+                    <ShoppingBag className="h-4 w-4 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Hoje</p>
+                    <p className="text-xl font-bold">{comandas.filter((c) => new Date(c.created_at).toDateString() === new Date().toDateString()).length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Comandas List */}
-          <div className="w-full md:w-1/3 lg:w-1/4 border-r flex flex-col">
+          <div className="w-full md:w-1/3 lg:w-1/4 border-r flex flex-col bg-muted/20">
             {/* Filters */}
-            <div className="p-4 space-y-3 border-b">
+            <div className="p-3 space-y-3 border-b bg-background">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar comanda..."
+                  placeholder="Buscar por número ou nome..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <Button
-                  variant={statusFilter === 'open' ? 'default' : 'outline'}
+                  variant={statusFilter === 'open' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setStatusFilter('open')}
                   className="flex-1"
                 >
-                  Abertas
+                  <span className="hidden sm:inline">Abertas</span>
+                  <span className="sm:hidden">Abert.</span>
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                    {comandas.filter((c) => c.status === 'open').length}
+                  </Badge>
                 </Button>
                 <Button
-                  variant={statusFilter === 'closed' ? 'default' : 'outline'}
+                  variant={statusFilter === 'closed' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setStatusFilter('closed')}
                   className="flex-1"
                 >
-                  Fechadas
+                  <span className="hidden sm:inline">Fechadas</span>
+                  <span className="sm:hidden">Fech.</span>
                 </Button>
                 <Button
-                  variant={statusFilter === 'all' ? 'default' : 'outline'}
+                  variant={statusFilter === 'all' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setStatusFilter('all')}
                   className="flex-1"
@@ -675,34 +751,45 @@ export default function ComandasManagement() {
                         </span>
                       </div>
                     </div>
-                    {selectedComanda.status === 'open' && (
-                      <div className="flex items-center gap-2">
-                        <Button onClick={() => setShowAddItems(true)}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Adicionar Itens
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setShowCloseDialog(true)}>
-                              <Check className="h-4 w-4 mr-2" />
-                              Fechar Comanda
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setShowCancelDialog(true)}
-                              className="text-destructive"
-                            >
-                              <X className="h-4 w-4 mr-2" />
-                              Cancelar Comanda
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {/* Print button - always visible */}
+                      <PrintComanda
+                        comanda={selectedComanda}
+                        items={comandaItems}
+                        companyName={companyName}
+                        variant="button"
+                      />
+
+                      {selectedComanda.status === 'open' && (
+                        <>
+                          <Button onClick={() => setShowAddItems(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Adicionar Itens
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-popover">
+                              <DropdownMenuItem onClick={() => setShowCloseDialog(true)}>
+                                <Check className="h-4 w-4 mr-2" />
+                                Fechar Comanda
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => setShowCancelDialog(true)}
+                                className="text-destructive"
+                              >
+                                <X className="h-4 w-4 mr-2" />
+                                Cancelar Comanda
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
