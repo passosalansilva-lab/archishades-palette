@@ -60,6 +60,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { POSProductModal, SelectedOption } from '@/components/pos/POSProductModal';
 import { PrintComanda } from '@/components/comandas/PrintComanda';
+import { BarcodeScanner } from '@/components/comandas/BarcodeScanner';
 
 interface Comanda {
   id: string;
@@ -153,6 +154,7 @@ export default function ComandasManagement() {
   // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('open');
+  const [scannerLoading, setScannerLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -514,6 +516,51 @@ export default function ComandasManagement() {
 
   const cartTotal = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
 
+  // Handle barcode scan - find or create comanda
+  const handleBarcodeScan = async (comandaNumber: number) => {
+    setScannerLoading(true);
+    try {
+      // First, try to find existing comanda with this number (open ones first)
+      const existingComanda = comandas.find(
+        (c) => c.number === comandaNumber && c.status === 'open'
+      );
+
+      if (existingComanda) {
+        setSelectedComanda(existingComanda);
+        setStatusFilter('open');
+        toast({ title: `Comanda #${comandaNumber} encontrada` });
+      } else {
+        // Check if there's a closed one with this number today
+        const closedToday = comandas.find(
+          (c) =>
+            c.number === comandaNumber &&
+            c.status === 'closed' &&
+            new Date(c.created_at).toDateString() === new Date().toDateString()
+        );
+
+        if (closedToday) {
+          setSelectedComanda(closedToday);
+          setStatusFilter('closed');
+          toast({
+            title: `Comanda #${comandaNumber} já foi fechada`,
+            description: 'Mostrando comanda fechada',
+          });
+        } else {
+          // Offer to create new comanda with this number
+          setIsManualNumber(true);
+          setNewComandaNumber(comandaNumber.toString());
+          setShowNewDialog(true);
+          toast({
+            title: `Comanda #${comandaNumber} não encontrada`,
+            description: 'Criar nova comanda com este número?',
+          });
+        }
+      }
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'open':
@@ -559,10 +606,16 @@ export default function ComandasManagement() {
                 Gerencie as comandas do estabelecimento
               </p>
             </div>
-            <Button onClick={() => setShowNewDialog(true)} size="lg" className="gap-2">
-              <Plus className="h-5 w-5" />
-              Nova Comanda
-            </Button>
+            <div className="flex items-center gap-3">
+              <BarcodeScanner 
+                onScan={handleBarcodeScan} 
+                isLoading={scannerLoading}
+              />
+              <Button onClick={() => setShowNewDialog(true)} size="lg" className="gap-2">
+                <Plus className="h-5 w-5" />
+                Nova Comanda
+              </Button>
+            </div>
           </div>
 
           {/* Quick Stats */}

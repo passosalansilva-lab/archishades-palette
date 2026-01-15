@@ -1,8 +1,9 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import JsBarcode from 'jsbarcode';
 
 interface ComandaItem {
   id: string;
@@ -34,6 +35,23 @@ interface PrintComandaProps {
   onPrint?: () => void;
 }
 
+// Generate barcode prefix for comandas
+const BARCODE_PREFIX = 'CMD';
+
+export function generateComandaBarcode(number: number): string {
+  return `${BARCODE_PREFIX}${number.toString().padStart(4, '0')}`;
+}
+
+export function parseComandaBarcode(barcode: string): number | null {
+  if (barcode.startsWith(BARCODE_PREFIX)) {
+    const num = parseInt(barcode.slice(BARCODE_PREFIX.length), 10);
+    return isNaN(num) ? null : num;
+  }
+  // Also try parsing plain numbers
+  const num = parseInt(barcode, 10);
+  return isNaN(num) ? null : num;
+}
+
 export function PrintComanda({
   comanda,
   items,
@@ -42,7 +60,35 @@ export function PrintComanda({
   onPrint,
 }: PrintComandaProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const barcodeRef = useRef<SVGSVGElement>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [, setBarcodeDataUrl] = useState<string>('');
+
+  // Generate barcode when comanda changes
+  useEffect(() => {
+    if (barcodeRef.current) {
+      try {
+        const barcodeValue = generateComandaBarcode(comanda.number);
+        JsBarcode(barcodeRef.current, barcodeValue, {
+          format: 'CODE128',
+          width: 2,
+          height: 50,
+          displayValue: true,
+          fontSize: 12,
+          margin: 5,
+          background: '#ffffff',
+        });
+        // Convert SVG to data URL for printing
+        const svgElement = barcodeRef.current;
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        setBarcodeDataUrl(url);
+      } catch (error) {
+        console.error('Error generating barcode:', error);
+      }
+    }
+  }, [comanda.number]);
 
   const getOrCreateIframe = useCallback(() => {
     if (iframeRef.current) {
@@ -77,7 +123,17 @@ export function PrintComanda({
     const printContent = printRef.current;
     if (!printContent) return;
 
-    const html = printContent.innerHTML;
+    // Get barcode SVG
+    const barcodeSvg = barcodeRef.current;
+    let barcodeHtml = '';
+    if (barcodeSvg) {
+      barcodeHtml = new XMLSerializer().serializeToString(barcodeSvg);
+    }
+
+    const html = printContent.innerHTML.replace(
+      '<!--BARCODE_PLACEHOLDER-->',
+      `<div class="barcode-container">${barcodeHtml}</div>`
+    );
 
     const styles = `
       <style>
@@ -109,9 +165,9 @@ export function PrintComanda({
           margin-bottom: 4px;
         }
         .comanda-number {
-          font-size: 28px;
+          font-size: 32px;
           font-weight: bold;
-          padding: 8px;
+          padding: 10px;
           margin: 8px 0;
           background: #000;
           color: #fff;
@@ -123,6 +179,21 @@ export function PrintComanda({
         }
         .date {
           font-size: 10px;
+          color: #666;
+          margin-top: 4px;
+        }
+        .barcode-container {
+          text-align: center;
+          margin: 15px 0;
+          padding: 10px;
+          background: #fff;
+        }
+        .barcode-container svg {
+          max-width: 100%;
+          height: auto;
+        }
+        .barcode-note {
+          font-size: 9px;
           color: #666;
           margin-top: 4px;
         }
@@ -215,17 +286,6 @@ export function PrintComanda({
           font-size: 10px;
           color: #666;
         }
-        .qr-placeholder {
-          width: 60px;
-          height: 60px;
-          border: 1px dashed #ccc;
-          margin: 10px auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 8px;
-          color: #999;
-        }
         .status-badge {
           display: inline-block;
           padding: 4px 12px;
@@ -285,6 +345,9 @@ export function PrintComanda({
         </Button>
       )}
 
+      {/* Hidden barcode SVG for generation */}
+      <svg ref={barcodeRef} className="hidden" />
+
       {/* Hidden print content */}
       <div className="hidden">
         <div ref={printRef}>
@@ -300,6 +363,10 @@ export function PrintComanda({
               {comanda.status === 'open' ? 'ABERTA' : comanda.status === 'closed' ? 'FECHADA' : 'CANCELADA'}
             </div>
           </div>
+
+          {/* Barcode - placeholder will be replaced on print */}
+          {'<!--BARCODE_PLACEHOLDER-->'}
+          <div className="barcode-note">Escaneie para abrir esta comanda</div>
 
           {/* Customer */}
           {(comanda.customer_name || comanda.customer_phone) && (
