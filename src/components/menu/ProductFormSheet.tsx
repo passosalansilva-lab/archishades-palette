@@ -652,8 +652,18 @@ export function ProductFormSheet({
     }
   };
 
+  // Navigate directly to step 2 (for existing products)
+  const goToStep2 = async () => {
+    if (currentProductId) {
+      setStep(2);
+      loadProductOptions(currentProductId);
+    }
+  };
+
   const handleSaveProduct = async () => {
-    if (!companyId || !categoryId || !productForm.name.trim()) return;
+    // For existing products, categoryId from product is used; for new, prop is required
+    const effectiveCategoryId = currentProductId ? (product?.category_id || categoryId) : categoryId;
+    if (!companyId || !effectiveCategoryId || !productForm.name.trim()) return;
 
     setSaving(true);
     try {
@@ -665,7 +675,7 @@ export function ProductFormSheet({
         image_url: productForm.image_url,
         price: Number(productForm.price || 0),
         promotional_price: promotionalPriceValue,
-        category_id: categoryId,
+        category_id: effectiveCategoryId,
         preparation_time_minutes: productForm.is_prepared
           ? Number(productForm.preparation_time_minutes || 30)
           : null,
@@ -1029,17 +1039,27 @@ export function ProductFormSheet({
                 {step === 2 && ' - Adicionais'}
               </span>
             </SheetTitle>
-            {/* Step indicator */}
+            {/* Step indicator - clickable tabs */}
             <div className="flex items-center gap-2 mt-2">
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors cursor-pointer ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              >
                 <span className="font-semibold">1</span>
                 <span>Dados do produto</span>
-              </div>
+              </button>
               <ArrowRight className="h-3 w-3 text-muted-foreground" />
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              <button
+                type="button"
+                onClick={() => currentProductId && goToStep2()}
+                disabled={!currentProductId}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'} ${currentProductId ? 'cursor-pointer hover:bg-muted/80' : 'opacity-50 cursor-not-allowed'}`}
+                title={!currentProductId ? 'Salve os dados do produto primeiro' : 'Ir para Adicionais'}
+              >
                 <span className="font-semibold">2</span>
                 <span>Adicionais</span>
-              </div>
+              </button>
             </div>
           </SheetHeader>
 
