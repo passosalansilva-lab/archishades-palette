@@ -14,7 +14,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, Loader2, GripVertical, Trash2, ChevronDown, Settings2, Link2, Share2, Clock, FileText, X, Upload, Eye, TrendingUp, ArrowUpDown, Pencil, Pizza } from 'lucide-react';
+import { Plus, Loader2, GripVertical, Trash2, ChevronDown, Settings2, Link2, Share2, Clock, FileText, X, Upload, Eye, TrendingUp, ArrowUpDown, Pencil } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,7 +55,7 @@ import { ProductFormSheet } from '@/components/menu/ProductFormSheet';
 import { CategoryPeriodLinker } from '@/components/menu/CategoryPeriodLinker';
 import { BulkImportModal } from '@/components/menu/BulkImportModal';
 import { MenuPreviewModal } from '@/components/menu/MenuPreviewModal';
-import { PizzaManagementPanel } from '@/components/menu/PizzaManagementPanel';
+
 import { useFormDraft, isDraftMeaningful } from '@/hooks/useFormDraft';
 import { cn } from '@/lib/utils';
 
@@ -160,7 +160,7 @@ export default function MenuManagement() {
   const [showDayPeriodsEditor, setShowDayPeriodsEditor] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [menuPreviewOpen, setMenuPreviewOpen] = useState(false);
-  const [pizzaPanelOpen, setPizzaPanelOpen] = useState(false);
+  
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -957,16 +957,6 @@ export default function MenuManagement() {
                   Preview
                 </Button>
               )}
-              {pizzaCategoryIds.length > 0 && (
-                <Button
-                  variant="outline"
-                  onClick={() => setPizzaPanelOpen(true)}
-                  title="Gerencie tamanhos, massas, bordas e regras de pizza"
-                >
-                  <Pizza className="h-4 w-4 mr-1" />
-                  Pizzas
-                </Button>
-              )}
               <Button
                 variant="outline"
                 onClick={() => setShowDayPeriodsEditor(!showDayPeriodsEditor)}
@@ -1593,14 +1583,6 @@ export default function MenuManagement() {
           onClose={() => setAcaiEditorSheet({ open: false, categoryId: '', categoryName: '' })}
         />
 
-        {/* Pizza Management Panel */}
-        {companyId && (
-          <PizzaManagementPanel
-            open={pizzaPanelOpen}
-            onClose={() => setPizzaPanelOpen(false)}
-            companyId={companyId}
-          />
-        )}
 
         {/* Bulk Import Modal */}
         {companyId && (
