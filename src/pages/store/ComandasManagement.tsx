@@ -365,10 +365,19 @@ export default function ComandasManagement() {
       let generatedComandaId: string | null = null;
 
       if (selectedGeneratedComanda) {
-        // Use selected generated comanda
+        // Use selected/scanned comanda number (barcode card)
         number = selectedGeneratedComanda;
-        const found = availableComandas.find(c => c.number === selectedGeneratedComanda);
-        if (found) generatedComandaId = found.id;
+
+        // Always try to link with generated_comandas row by number (even if it was used before)
+        const { data: genRow, error: genRowError } = await (supabase as any)
+          .from('generated_comandas')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('number', number)
+          .maybeSingle();
+
+        if (genRowError) throw genRowError;
+        if (genRow?.id) generatedComandaId = genRow.id;
       } else if (isManualNumber) {
         const parsed = parseInt(newComandaNumber, 10);
         if (isNaN(parsed) || parsed <= 0) {
@@ -436,11 +445,21 @@ export default function ComandasManagement() {
       if (generatedComandaId) {
         await (supabase as any)
           .from('generated_comandas')
-          .update({ 
+          .update({
             used_at: new Date().toISOString(),
-            comanda_id: newComanda.id 
+            comanda_id: newComanda.id,
           })
           .eq('id', generatedComandaId);
+      } else if (selectedGeneratedComanda) {
+        // Fallback: if we scanned a number but didn't find the row id, try by number
+        await (supabase as any)
+          .from('generated_comandas')
+          .update({
+            used_at: new Date().toISOString(),
+            comanda_id: newComanda.id,
+          })
+          .eq('company_id', companyId)
+          .eq('number', number);
       }
 
       toast({ title: `Comanda #${number} criada com sucesso` });
@@ -515,7 +534,7 @@ export default function ComandasManagement() {
     amountReceived: number,
     changeAmount: number
   ) => {
-    if (!selectedComanda) return;
+    if (!selectedComanda || !companyId) return;
 
     setClosingComanda(true);
     try {
@@ -529,9 +548,8 @@ export default function ComandasManagement() {
 
       const dbItemsTotal = (dbItems || []).reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
       const stateItemsTotal = comandaItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
-      const finalTotal = (dbItemsTotal > 0 ? dbItemsTotal : stateItemsTotal) > 0
-        ? (dbItemsTotal > 0 ? dbItemsTotal : stateItemsTotal)
-        : selectedComanda.total;
+      const computed = dbItemsTotal > 0 ? dbItemsTotal : stateItemsTotal;
+      const finalTotal = computed > 0 ? computed : selectedComanda.total;
 
       const { error } = await (supabase as any)
         .from('comandas')
@@ -541,27 +559,29 @@ export default function ComandasManagement() {
           payment_method: paymentMethod,
           amount_received: amountReceived,
           change_amount: changeAmount,
-          total: finalTotal, // Save the total when closing
+          total: finalTotal,
         })
         .eq('id', selectedComanda.id);
 
       if (error) throw error;
 
-      // If this comanda was created from a generated card, free the card for reuse
+      // Free the card number for reuse (generated card)
       await (supabase as any)
         .from('generated_comandas')
         .update({ used_at: null, comanda_id: null })
-        .eq('comanda_id', selectedComanda.id);
+        .eq('company_id', companyId)
+        .eq('number', selectedComanda.number);
 
       const methodLabel = paymentMethod === 'dinheiro' ? 'Dinheiro' : paymentMethod === 'cartao' ? 'Cartão' : 'PIX';
       toast({
         title: `Comanda #${selectedComanda.number} fechada`,
         description: `Pagamento: ${methodLabel}${changeAmount > 0 ? ` - Troco: R$ ${changeAmount.toFixed(2).replace('.', ',')}` : ''}`,
       });
+
       setShowCloseDialog(false);
       setSelectedComanda(null);
       loadComandas();
-      loadAvailableComandas(); // Refresh available list - closed comanda is now reusable
+      loadAvailableComandas();
     } catch (error: any) {
       console.error('Error closing comanda:', error);
       toast({ title: 'Erro ao fechar comanda', description: error.message, variant: 'destructive' });
@@ -571,7 +591,7 @@ export default function ComandasManagement() {
   };
 
   const handleCancelComanda = async () => {
-    if (!selectedComanda) return;
+    if (!selectedComanda || !companyId) return;
 
     setClosingComanda(true);
     try {
@@ -582,17 +602,18 @@ export default function ComandasManagement() {
 
       if (error) throw error;
 
-      // If this comanda was created from a generated card, free the card for reuse
+      // Free the card number for reuse (generated card)
       await (supabase as any)
         .from('generated_comandas')
         .update({ used_at: null, comanda_id: null })
-        .eq('comanda_id', selectedComanda.id);
+        .eq('company_id', companyId)
+        .eq('number', selectedComanda.number);
 
       toast({ title: `Comanda #${selectedComanda.number} cancelada` });
       setShowCancelDialog(false);
       setSelectedComanda(null);
       loadComandas();
-      loadAvailableComandas(); // Refresh available list - cancelled comanda is now reusable
+      loadAvailableComandas();
     } catch (error: any) {
       console.error('Error cancelling comanda:', error);
       toast({ title: 'Erro ao cancelar comanda', description: error.message, variant: 'destructive' });
@@ -1649,7 +1670,14 @@ export default function ComandasManagement() {
         open={showCloseDialog}
         onOpenChange={setShowCloseDialog}
         comandaNumber={selectedComanda?.number || 0}
-        total={selectedComanda?.total || 0}
+        total={
+          selectedComanda
+            ? Math.max(
+                selectedComanda.total || 0,
+                comandaItems.reduce((sum, item) => sum + (item.total_price || 0), 0)
+              )
+            : 0
+        }
         onConfirm={handleCloseComanda}
         isLoading={closingComanda}
       />
