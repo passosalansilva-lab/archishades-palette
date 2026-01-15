@@ -729,42 +729,44 @@ export default function ManualOrderPOS() {
 
                 <Separator />
 
-                {/* Customer data */}
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Dados do Cliente
-                  </h3>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs">Nome *</Label>
-                      <Input
-                        placeholder="Nome do cliente"
-                        value={customer.name}
-                        onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Telefone *</Label>
-                      <Input
-                        placeholder="(00) 00000-0000"
-                        value={customer.phone}
-                        onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">E-mail (opcional)</Label>
-                      <Input
-                        type="email"
-                        placeholder="email@exemplo.com"
-                        value={customer.email}
-                        onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                      />
+                {/* Customer data (only for delivery) */}
+                {deliveryType === 'delivery' && (
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Dados do Cliente
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs">Nome *</Label>
+                        <Input
+                          placeholder="Nome do cliente"
+                          value={customer.name}
+                          onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Telefone *</Label>
+                        <Input
+                          placeholder="(00) 00000-0000"
+                          value={customer.phone}
+                          onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">E-mail (opcional)</Label>
+                        <Input
+                          type="email"
+                          placeholder="email@exemplo.com"
+                          value={customer.email}
+                          onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
-                <Separator />
+                {deliveryType === 'delivery' && <Separator />}
 
                 {/* Delivery type */}
                 <div>
