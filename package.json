@@ -54,7 +54,6 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.26",
-    "html5-qrcode": "^2.3.8",
     "input-otp": "^1.4.2",
     "jsbarcode": "^3.12.3",
     "jsdom": "^27.4.0",
