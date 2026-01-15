@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Package, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Package, Check, Pizza } from 'lucide-react';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { ProductRecipeEditor } from '@/components/inventory/ProductRecipeEditor';
 import { ProductIngredientsEditor } from '@/components/menu/ProductIngredientsEditor';
 import { ProductTagsEditor } from '@/components/menu/ProductTagsEditor';
+import { ProductPizzaSettings } from '@/components/menu/ProductPizzaSettings';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
@@ -436,8 +437,8 @@ export function ProductFormSheet({
   const { toast } = useToast();
   const { getDraft, saveDraft, clearDraft } = useFormDraft<ProductFormDraft>('product');
 
-  // Step state (1 = product details, 2 = options)
-  const [step, setStep] = useState<1 | 2>(1);
+  // Step state (1 = product details, 2 = options, 3 = pizza settings)
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [saving, setSaving] = useState(false);
   const [currentProductId, setCurrentProductId] = useState<string | null>(product?.id || null);
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
@@ -1040,7 +1041,7 @@ export function ProductFormSheet({
               </span>
             </SheetTitle>
             {/* Step indicator - clickable tabs with progress */}
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setStep(1)}
@@ -1051,7 +1052,7 @@ export function ProductFormSheet({
                 ) : (
                   <span className="font-semibold">1</span>
                 )}
-                <span>Dados do produto</span>
+                <span>Dados</span>
               </button>
               <ArrowRight className="h-3 w-3 text-muted-foreground" />
               <button
@@ -1068,6 +1069,21 @@ export function ProductFormSheet({
                 )}
                 <span>Adicionais</span>
               </button>
+              {isPizzaCategory && (
+                <>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                  <button
+                    type="button"
+                    onClick={() => currentProductId && setStep(3)}
+                    disabled={!currentProductId}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs transition-colors ${step === 3 ? 'bg-primary text-primary-foreground' : currentProductId ? 'bg-muted text-muted-foreground cursor-pointer hover:bg-muted/80' : 'bg-muted text-muted-foreground opacity-50 cursor-not-allowed'}`}
+                    title={!currentProductId ? 'Salve os dados do produto primeiro' : 'Configurações de Pizza'}
+                  >
+                    <Pizza className="h-3 w-3" />
+                    <span>Pizza</span>
+                  </button>
+                </>
+              )}
             </div>
           </SheetHeader>
 
@@ -1287,6 +1303,23 @@ export function ProductFormSheet({
             </div>
           )}
 
+          {/* Step 3: Pizza Settings */}
+          {step === 3 && isPizzaCategory && currentProductId && categoryId && (
+            <div className="py-4">
+              <ProductPizzaSettings
+                categoryId={categoryId}
+                companyId={companyId}
+                productId={currentProductId}
+                allowHalfHalf={productForm.allow_half_half_flavor}
+                onAllowHalfHalfChange={(checked) => {
+                  setProductForm((prev) => ({ ...prev, allow_half_half_flavor: checked }));
+                  // Save immediately
+                  savePizzaSettings(currentProductId);
+                }}
+              />
+            </div>
+          )}
+
           <SheetFooter className="flex flex-row items-center justify-between gap-3 pt-4 border-t">
             <Button variant="outline" onClick={handleClose}>
               Cancelar
@@ -1299,11 +1332,17 @@ export function ProductFormSheet({
                   <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
               )}
-              {step === 2 && (
+              {step === 2 && isPizzaCategory && (
+                <Button onClick={() => setStep(3)}>
+                  Configurar Pizza
+                  <Pizza className="h-4 w-4 ml-1" />
+                </Button>
+              )}
+              {(step === 2 && !isPizzaCategory) || step === 3 ? (
                 <Button onClick={handleFinish}>
                   Concluir
                 </Button>
-              )}
+              ) : null}
             </div>
           </SheetFooter>
         </SheetContent>
