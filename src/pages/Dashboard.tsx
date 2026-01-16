@@ -409,7 +409,7 @@ export default function Dashboard() {
               </div>
               <Button 
                 className="gradient-primary gap-2"
-                onClick={() => window.open('https://uyaymtikndembadyljib.supabase.co/storage/v1/object/public/downloads/CardapioOn-Setup.exe', '_blank')}
+                onClick={() => window.open('https://github.com/passosalansilva-lab/archive/releases/download/untagged-62a4d689b36cb89f7514/CardapioOn-Setup.exe', '_blank')}
               >
                 <Download className="h-4 w-4" />
                 Baixar para Windows
