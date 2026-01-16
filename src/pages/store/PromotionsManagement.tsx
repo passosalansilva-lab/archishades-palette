@@ -59,6 +59,7 @@ interface Promotion {
   is_active: boolean;
   expires_at: string | null;
   created_at: string;
+  apply_to_all_sizes?: boolean | null;
   products?: { name: string } | null;
   categories?: { name: string } | null;
 }
@@ -71,6 +72,12 @@ interface Product {
 interface Category {
   id: string;
   name: string;
+}
+
+interface ProductSize {
+  id: string;
+  name: string;
+  price_modifier: number;
 }
 
 export default function PromotionsManagement() {
@@ -87,6 +94,12 @@ export default function PromotionsManagement() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
   const [applyTo, setApplyTo] = useState<'product' | 'category'>('product');
+  
+  // Size-related states
+  const [productSizes, setProductSizes] = useState<ProductSize[]>([]);
+  const [loadingSizes, setLoadingSizes] = useState(false);
+  const [applyToAllSizes, setApplyToAllSizes] = useState(true);
+  const [selectedSizeIds, setSelectedSizeIds] = useState<string[]>([]);
 
   const {
     register,
@@ -103,6 +116,18 @@ export default function PromotionsManagement() {
   });
 
   const discountType = watch('discount_type');
+  const watchedProductId = watch('product_id');
+
+  // Load sizes when product changes
+  useEffect(() => {
+    if (applyTo === 'product' && watchedProductId) {
+      loadProductSizes(watchedProductId);
+      setApplyToAllSizes(true);
+      setSelectedSizeIds([]);
+    } else {
+      setProductSizes([]);
+    }
+  }, [watchedProductId, applyTo]);
 
   useEffect(() => {
     loadData();
@@ -164,10 +189,80 @@ export default function PromotionsManagement() {
     }
   };
 
+  // Load sizes for a specific product
+  const loadProductSizes = async (productId: string) => {
+    if (!productId) {
+      setProductSizes([]);
+      return;
+    }
+
+    setLoadingSizes(true);
+    try {
+      // Find size group for this product
+      const { data: groups } = await supabase
+        .from('product_option_groups')
+        .select('id, name')
+        .eq('product_id', productId);
+
+      const sizeGroup = groups?.find(g => {
+        const name = (g.name || '').toLowerCase().trim();
+        return name === 'tamanho' || name === 'tamanhos' || name.includes('tamanho');
+      });
+
+      if (!sizeGroup) {
+        setProductSizes([]);
+        setLoadingSizes(false);
+        return;
+      }
+
+      // Get options for this size group
+      const { data: options } = await supabase
+        .from('product_options')
+        .select('id, name, price_modifier')
+        .eq('group_id', sizeGroup.id)
+        .eq('is_available', true)
+        .order('sort_order');
+
+      setProductSizes(options || []);
+    } catch (error) {
+      console.error('Error loading product sizes:', error);
+      setProductSizes([]);
+    } finally {
+      setLoadingSizes(false);
+    }
+  };
+
+  // Load selected sizes for a promotion
+  const loadPromotionSizes = async (promotionId: string) => {
+    try {
+      // Query the promotion_sizes table if it exists
+      // This uses a raw query approach to handle the case where the table might not exist yet
+      const { data, error } = await supabase
+        .from('promotion_sizes' as any)
+        .select('product_option_id')
+        .eq('promotion_id', promotionId);
+
+      if (error) {
+        // Table might not exist yet, just use empty array
+        console.log('promotion_sizes table not available yet:', error.message);
+        setSelectedSizeIds([]);
+        return;
+      }
+
+      setSelectedSizeIds((data || []).map((s: any) => s.product_option_id));
+    } catch (error) {
+      console.error('Error loading promotion sizes:', error);
+      setSelectedSizeIds([]);
+    }
+  };
+
   const openCreateDialog = () => {
     setEditingPromotion(null);
     setImageUrl(null);
-    setApplyTo('product'); // Default to product
+    setApplyTo('product');
+    setProductSizes([]);
+    setApplyToAllSizes(true);
+    setSelectedSizeIds([]);
     reset({
       name: '',
       description: '',
@@ -180,16 +275,24 @@ export default function PromotionsManagement() {
     setDialogOpen(true);
   };
 
-  const openEditDialog = (promotion: Promotion) => {
+  const openEditDialog = async (promotion: Promotion) => {
     setEditingPromotion(promotion);
     setImageUrl(promotion.image_url);
     
     // Determine applyTo based on existing data
     if (promotion.category_id) {
       setApplyTo('category');
+      setProductSizes([]);
     } else {
       setApplyTo('product');
+      if (promotion.product_id) {
+        await loadProductSizes(promotion.product_id);
+        await loadPromotionSizes(promotion.id);
+      }
     }
+    
+    // Set size mode
+    setApplyToAllSizes(promotion.apply_to_all_sizes !== false);
     
     // Format datetime for input
     let expiresAt = '';
@@ -221,11 +324,14 @@ export default function PromotionsManagement() {
         description: data.description || null,
         discount_type: data.discount_type,
         discount_value: data.discount_value,
-        product_id: data.product_id || null,
-        category_id: data.category_id || null,
+        product_id: applyTo === 'product' ? (data.product_id || null) : null,
+        category_id: applyTo === 'category' ? (data.category_id || null) : null,
         image_url: imageUrl,
         expires_at: data.expires_at || null,
+        apply_to_all_sizes: applyToAllSizes,
       };
+
+      let promotionId: string;
 
       if (editingPromotion) {
         // Update existing promotion
@@ -235,6 +341,7 @@ export default function PromotionsManagement() {
           .eq('id', editingPromotion.id);
 
         if (error) throw error;
+        promotionId = editingPromotion.id;
 
         await logActivity({
           actionType: 'update',
@@ -259,6 +366,7 @@ export default function PromotionsManagement() {
           .single();
 
         if (error) throw error;
+        promotionId = inserted.id;
 
         await logActivity({
           actionType: 'create',
@@ -274,10 +382,36 @@ export default function PromotionsManagement() {
         });
       }
 
+      // Save selected sizes if product has sizes and specific sizes are selected
+      if (applyTo === 'product' && productSizes.length > 0 && !applyToAllSizes && selectedSizeIds.length > 0) {
+        try {
+          // Delete existing size associations
+          await supabase
+            .from('promotion_sizes' as any)
+            .delete()
+            .eq('promotion_id', promotionId);
+
+          // Insert new size associations
+          const sizeInserts = selectedSizeIds.map(sizeId => ({
+            promotion_id: promotionId,
+            product_option_id: sizeId,
+          }));
+
+          await supabase
+            .from('promotion_sizes' as any)
+            .insert(sizeInserts);
+        } catch (sizeError) {
+          console.log('Could not save size associations (table may not exist yet):', sizeError);
+        }
+      }
+
       reset();
       setImageUrl(null);
       setEditingPromotion(null);
       setDialogOpen(false);
+      setProductSizes([]);
+      setApplyToAllSizes(true);
+      setSelectedSizeIds([]);
       loadData();
     } catch (error: any) {
       console.error('Error saving promotion:', error);
@@ -683,6 +817,78 @@ export default function PromotionsManagement() {
                   <p className="text-xs text-muted-foreground">
                     A promoção será aplicada apenas a este produto
                   </p>
+                  
+                  {/* Size Selection - Only show if product has sizes */}
+                  {loadingSizes && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-3">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Carregando tamanhos...
+                    </div>
+                  )}
+                  
+                  {!loadingSizes && productSizes.length > 0 && (
+                    <div className="mt-4 p-4 border rounded-lg bg-muted/30 space-y-3">
+                      <Label className="font-medium">Aplicar desconto em quais tamanhos?</Label>
+                      
+                      <RadioGroup
+                        value={applyToAllSizes ? 'all' : 'specific'}
+                        onValueChange={(val) => {
+                          const isAll = val === 'all';
+                          setApplyToAllSizes(isAll);
+                          if (isAll) {
+                            setSelectedSizeIds([]);
+                          }
+                        }}
+                        className="space-y-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="all" id="sizes-all" />
+                          <Label htmlFor="sizes-all" className="cursor-pointer">
+                            Todos os tamanhos
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="specific" id="sizes-specific" />
+                          <Label htmlFor="sizes-specific" className="cursor-pointer">
+                            Apenas tamanhos selecionados
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                      
+                      {!applyToAllSizes && (
+                        <div className="grid grid-cols-2 gap-2 mt-3">
+                          {productSizes.map((size) => (
+                            <label
+                              key={size.id}
+                              className={`
+                                flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all
+                                ${selectedSizeIds.includes(size.id) 
+                                  ? 'border-primary bg-primary/10' 
+                                  : 'border-border hover:border-primary/50'}
+                              `}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedSizeIds.includes(size.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedSizeIds([...selectedSizeIds, size.id]);
+                                  } else {
+                                    setSelectedSizeIds(selectedSizeIds.filter(id => id !== size.id));
+                                  }
+                                }}
+                                className="rounded border-input"
+                              />
+                              <span className="font-medium">{size.name}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">
+                                R$ {Number(size.price_modifier).toFixed(2)}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-2">
