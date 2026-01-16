@@ -55,7 +55,6 @@ import { ProductFormSheet } from '@/components/menu/ProductFormSheet';
 import { CategoryPeriodLinker } from '@/components/menu/CategoryPeriodLinker';
 import { BulkImportModal } from '@/components/menu/BulkImportModal';
 import { MenuPreviewModal } from '@/components/menu/MenuPreviewModal';
-import { PizzaManagementPanel } from '@/components/menu/PizzaManagementPanel';
 
 import { useFormDraft, isDraftMeaningful } from '@/hooks/useFormDraft';
 import { cn } from '@/lib/utils';
@@ -145,6 +144,13 @@ export default function MenuManagement() {
   }>({ open: false, category: null });
   const [savingCategory, setSavingCategory] = useState(false);
   const [categoryType, setCategoryType] = useState<'normal' | 'pizza' | 'acai' | 'combos'>('normal');
+  
+  // Pizza category settings for the dialog
+  const [pizzaCategoryDialogSettings, setPizzaCategoryDialogSettings] = useState<{
+    allowHalfHalf: boolean;
+    halfHalfPricingRule: 'average' | 'highest' | 'sum';
+    maxFlavors: number;
+  }>({ allowHalfHalf: true, halfHalfPricingRule: 'average', maxFlavors: 2 });
 
   const [comboSheet, setComboSheet] = useState<{
     open: boolean;
@@ -159,7 +165,6 @@ export default function MenuManagement() {
   const [acaiCategoryBasePrices, setAcaiCategoryBasePrices] = useState<Record<string, number>>({});
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [acaiEditorSheet, setAcaiEditorSheet] = useState<{ open: boolean; categoryId: string; categoryName: string }>({ open: false, categoryId: '', categoryName: '' });
-  const [pizzaEditorSheet, setPizzaEditorSheet] = useState<{ open: boolean }>({ open: false });
   const [showDayPeriodsEditor, setShowDayPeriodsEditor] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [menuPreviewOpen, setMenuPreviewOpen] = useState(false);
@@ -513,6 +518,8 @@ export default function MenuManagement() {
     try {
       setSavingCategory(true);
       
+      let categoryId = values.id;
+      
       // Check if we're editing an existing category
       if (values.id) {
         const { error } = await supabase
@@ -523,6 +530,20 @@ export default function MenuManagement() {
           })
           .eq('id', values.id);
         if (error) throw error;
+        
+        // Update pizza category settings if it's a pizza category
+        if (values.type === 'pizza') {
+          const { error: settingsError } = await supabase
+            .from('pizza_category_settings')
+            .upsert({
+              category_id: values.id,
+              allow_half_half: pizzaCategoryDialogSettings.allowHalfHalf,
+              half_half_pricing_rule: pizzaCategoryDialogSettings.halfHalfPricingRule,
+              max_flavors: pizzaCategoryDialogSettings.maxFlavors,
+            }, { onConflict: 'category_id' });
+          if (settingsError) throw settingsError;
+        }
+        
         toast({ title: 'Categoria atualizada com sucesso' });
       } else {
         // Create new category
@@ -540,6 +561,8 @@ export default function MenuManagement() {
           .select('*')
           .single();
         if (error) throw error;
+        
+        categoryId = data.id;
 
         if (values.type === 'pizza') {
           const { error: pizzaError } = await supabase.from('pizza_categories').insert({
@@ -547,6 +570,17 @@ export default function MenuManagement() {
             category_id: data.id,
           });
           if (pizzaError) throw pizzaError;
+          
+          // Create pizza category settings with half & half config
+          const { error: settingsError } = await supabase
+            .from('pizza_category_settings')
+            .insert({
+              category_id: data.id,
+              allow_half_half: pizzaCategoryDialogSettings.allowHalfHalf,
+              half_half_pricing_rule: pizzaCategoryDialogSettings.halfHalfPricingRule,
+              max_flavors: pizzaCategoryDialogSettings.maxFlavors,
+            });
+          if (settingsError) throw settingsError;
         }
 
         if (values.type === 'acai') {
@@ -564,6 +598,7 @@ export default function MenuManagement() {
       
       setCategoryDialog({ open: false, category: null });
       setCategoryType('normal');
+      setPizzaCategoryDialogSettings({ allowHalfHalf: true, halfHalfPricingRule: 'average', maxFlavors: 2 });
       await loadData();
     } catch (error: any) {
       console.error(error);
@@ -1109,7 +1144,7 @@ export default function MenuManagement() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => {
+                                onClick={async () => {
                                   // Determine category type for editing
                                   let type: 'normal' | 'pizza' | 'acai' | 'combos' = 'normal';
                                   if (pizzaCategoryIds.includes(category.id)) type = 'pizza';
@@ -1117,23 +1152,36 @@ export default function MenuManagement() {
                                   else if (category.category_type === 'combos') type = 'combos';
                                   
                                   setCategoryType(type);
+                                  
+                                  // Load pizza category settings if it's a pizza category
+                                  if (type === 'pizza') {
+                                    const { data } = await supabase
+                                      .from('pizza_category_settings')
+                                      .select('*')
+                                      .eq('category_id', category.id)
+                                      .maybeSingle();
+                                    
+                                    if (data) {
+                                      setPizzaCategoryDialogSettings({
+                                        allowHalfHalf: data.allow_half_half ?? true,
+                                        halfHalfPricingRule: (data.half_half_pricing_rule as 'average' | 'highest' | 'sum') || 'average',
+                                        maxFlavors: data.max_flavors || 2,
+                                      });
+                                    } else {
+                                      setPizzaCategoryDialogSettings({
+                                        allowHalfHalf: true,
+                                        halfHalfPricingRule: 'average',
+                                        maxFlavors: 2,
+                                      });
+                                    }
+                                  }
+                                  
                                   setCategoryDialog({ open: true, category });
                                 }}
                                 title="Editar categoria"
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              {pizzaCategoryIds.includes(category.id) && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="gap-1"
-                                  onClick={() => setPizzaEditorSheet({ open: true })}
-                                >
-                                  <Settings2 className="h-4 w-4" />
-                                  Configurar Pizza
-                                </Button>
-                              )}
                               {acaiCategoryIds.includes(category.id) && (
                                 <Button
                                   variant="outline"
@@ -1404,6 +1452,119 @@ export default function MenuManagement() {
                   placeholder="Texto que aparece abaixo do nome da categoria"
                 />
               </div>
+
+              {/* Pizza half & half settings */}
+              {categoryType === 'pizza' && (
+                <div className="space-y-4 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Permitir meia a meia</p>
+                      <p className="text-xs text-muted-foreground">
+                        Clientes podem montar pizzas com sabores diferentes
+                      </p>
+                    </div>
+                    <Switch
+                      checked={pizzaCategoryDialogSettings.allowHalfHalf}
+                      onCheckedChange={(checked) =>
+                        setPizzaCategoryDialogSettings((prev) => ({
+                          ...prev,
+                          allowHalfHalf: checked,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  {pizzaCategoryDialogSettings.allowHalfHalf && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Regra de preço do meia a meia</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            className={cn(
+                              "p-2 rounded-lg border-2 text-center transition-all",
+                              pizzaCategoryDialogSettings.halfHalfPricingRule === 'average'
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() =>
+                              setPizzaCategoryDialogSettings((prev) => ({
+                                ...prev,
+                                halfHalfPricingRule: 'average',
+                              }))
+                            }
+                          >
+                            <p className="text-sm font-medium">Média</p>
+                            <p className="text-xs text-muted-foreground">dos sabores</p>
+                          </button>
+                          <button
+                            type="button"
+                            className={cn(
+                              "p-2 rounded-lg border-2 text-center transition-all",
+                              pizzaCategoryDialogSettings.halfHalfPricingRule === 'highest'
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() =>
+                              setPizzaCategoryDialogSettings((prev) => ({
+                                ...prev,
+                                halfHalfPricingRule: 'highest',
+                              }))
+                            }
+                          >
+                            <p className="text-sm font-medium">Maior</p>
+                            <p className="text-xs text-muted-foreground">sabor mais caro</p>
+                          </button>
+                          <button
+                            type="button"
+                            className={cn(
+                              "p-2 rounded-lg border-2 text-center transition-all",
+                              pizzaCategoryDialogSettings.halfHalfPricingRule === 'sum'
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() =>
+                              setPizzaCategoryDialogSettings((prev) => ({
+                                ...prev,
+                                halfHalfPricingRule: 'sum',
+                              }))
+                            }
+                          >
+                            <p className="text-sm font-medium">Soma</p>
+                            <p className="text-xs text-muted-foreground">proporcional</p>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Máximo de sabores</label>
+                        <div className="flex gap-2">
+                          {[2, 3, 4].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              className={cn(
+                                "px-4 py-2 rounded-lg border-2 transition-all",
+                                pizzaCategoryDialogSettings.maxFlavors === num
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-primary/50"
+                              )}
+                              onClick={() =>
+                                setPizzaCategoryDialogSettings((prev) => ({
+                                  ...prev,
+                                  maxFlavors: num,
+                                }))
+                              }
+                            >
+                              {num} sabores
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -1615,17 +1776,6 @@ export default function MenuManagement() {
           open={acaiEditorSheet.open}
           onClose={() => setAcaiEditorSheet({ open: false, categoryId: '', categoryName: '' })}
         />
-
-        {/* Pizza Management Panel */}
-        {companyId && (
-          <PizzaManagementPanel
-            open={pizzaEditorSheet.open}
-            onClose={() => setPizzaEditorSheet({ open: false })}
-            companyId={companyId}
-          />
-        )}
-
-
         {/* Bulk Import Modal */}
         {companyId && (
           <BulkImportModal
