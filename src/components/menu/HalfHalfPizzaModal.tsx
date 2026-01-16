@@ -223,7 +223,7 @@ export function HalfHalfPizzaModal({
               slices: estimateSlices(key),
             };
           })
-          .sort((a, b) => a.base_price - b.base_price);
+          .sort((a, b) => b.slices - a.slices);
 
         setSizePriceByProduct(perProductSizeMap);
         setPizzaSizes(sizesList);
@@ -242,7 +242,7 @@ export function HalfHalfPizzaModal({
         .from("pizza_category_sizes")
         .select("id, name, base_price, max_flavors, slices")
         .eq("category_id", categoryId)
-        .order("sort_order");
+        .order("slices", { ascending: false });
 
       if (!catError && categorySizes && categorySizes.length > 0) {
         setSizePriceByProduct({});
