@@ -105,20 +105,22 @@ export default function Dashboard() {
     }
   });
 
-  const [desktopDownloadFrameUrl, setDesktopDownloadFrameUrl] = useState<string | null>(null);
-
   const handleDesktopAppDownload = () => {
-    setDesktopAppDownloaded(true);
+    // Trigger download via a programmatic <a> click (iframes are often blocked by GitHub via X-Frame-Options).
+    const a = document.createElement('a');
+    a.href = DESKTOP_APP_DOWNLOAD_URL;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
 
+    setDesktopAppDownloaded(true);
     try {
       localStorage.setItem('desktop-app-downloaded', 'true');
     } catch {
       // ignore
     }
-
-    // Use a hidden iframe to trigger the file download without navigating away to GitHub.
-    setDesktopDownloadFrameUrl(DESKTOP_APP_DOWNLOAD_URL);
-    window.setTimeout(() => setDesktopDownloadFrameUrl(null), 5000);
   };
   const {
     companyId,
@@ -434,14 +436,6 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              {desktopDownloadFrameUrl && (
-                <iframe
-                  title="desktop-download"
-                  src={desktopDownloadFrameUrl}
-                  className="hidden"
-                />
-              )}
-
               <Button className="gradient-primary gap-2" onClick={handleDesktopAppDownload}>
                 <Download className="h-4 w-4" />
                 Baixar para Windows
