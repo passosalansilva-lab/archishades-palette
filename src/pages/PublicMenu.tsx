@@ -985,8 +985,7 @@ function PublicMenuContent() {
     items.length > 0 // Only enable when cart has items
   );
 
-  // IDs de produtos que NÃO podem ser usados em meio a meio (config por produto)
-  const [halfHalfDisabledProductIds, setHalfHalfDisabledProductIds] = useState<string[]>([]);
+  // Meio a meio é controlado somente pela categoria (sem override por produto)
 
   // Mapa category_id -> preço base do tamanho "Grande" (ou primeiro tamanho)
   const [pizzaCategoryBasePrices, setPizzaCategoryBasePrices] = useState<Record<string, number>>({});
@@ -994,46 +993,6 @@ function PublicMenuContent() {
   // Açaí categories e preços base
   const [acaiCategoryIds, setAcaiCategoryIds] = useState<string[]>([]);
   const [acaiCategoryBasePrices, setAcaiCategoryBasePrices] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    const loadHalfHalfEligibility = async () => {
-      try {
-        if (!pizzaConfig.pizzaCategoryIds.length || !products.length) {
-          setHalfHalfDisabledProductIds([]);
-          return;
-        }
-
-        const pizzaCategoryProducts = products.filter(
-          (p) => p.category_id && pizzaConfig.pizzaCategoryIds.includes(p.category_id)
-        );
-
-        if (!pizzaCategoryProducts.length) {
-          setHalfHalfDisabledProductIds([]);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('pizza_product_settings')
-          .select('product_id, allow_half_half')
-          .in('product_id', pizzaCategoryProducts.map((p) => p.id));
-
-        if (error) {
-          console.error('Erro ao carregar configurações de meio a meio por produto:', error);
-          return;
-        }
-
-        const disabledIds = (data || [])
-          .filter((row: any) => row.allow_half_half === false)
-          .map((row: any) => row.product_id as string);
-
-        setHalfHalfDisabledProductIds(disabledIds);
-      } catch (err) {
-        console.error('Erro inesperado ao carregar elegibilidade de meio a meio:', err);
-      }
-    };
-
-    loadHalfHalfEligibility();
-  }, [pizzaConfig.pizzaCategoryIds, products]);
 
   // Carregar preço base por PRODUTO de pizza (não por categoria)
   // Busca os tamanhos configurados em product_option_groups/product_options
@@ -1199,14 +1158,13 @@ function PublicMenuContent() {
     loadAcaiData();
   }, [company?.id]);
 
-  // Pizza products for half-half (respeita flag por produto)
+  // Pizza products for half-half (somente por categoria)
   const pizzaCategoryIdsArray = pizzaConfig?.pizzaCategoryIds || [];
   const rawPizzaProducts = pizzaCategoryIdsArray.length > 0
     ? products.filter(
         (p) =>
           p.category_id &&
-          pizzaCategoryIdsArray.includes(p.category_id) &&
-          !halfHalfDisabledProductIds.includes(p.id)
+          pizzaCategoryIdsArray.includes(p.category_id)
       )
     : [];
 
@@ -1230,10 +1188,9 @@ function PublicMenuContent() {
     ...p,
     price: getDisplayPrice(p),
   }));
-  // Verifica se pelo menos uma categoria de pizza permite meio a meio
-  const hasHalfHalfEnabled = Object.values(pizzaConfig.categorySettings || {}).some(
-    (cs) => cs.allow_half_half === true
-  );
+  // Config de meio a meio (por categoria)
+  const halfHalfCategorySetting = Object.values(pizzaConfig.categorySettings || {})[0];
+  const hasHalfHalfEnabled = !!halfHalfCategorySetting?.allow_half_half;
   const canShowHalfHalf = pizzaProducts.length >= 2 && hasHalfHalfEnabled;
 
   const scrollToCategory = (categoryId: string | null) => {
@@ -1855,18 +1812,37 @@ function PublicMenuContent() {
         <div className="mt-6 px-4">
           <button
             onClick={() => setHalfHalfModalOpen(true)}
-            className="w-full p-6 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-secondary/10 border-2 border-primary/20 hover:border-primary/40 transition-all active:scale-[0.98] group"
+            className={cn(
+              "w-full p-6 rounded-2xl border overflow-hidden relative",
+              "bg-gradient-to-br from-primary/10 via-background to-secondary/10",
+              "border-primary/20 hover:border-primary/40 transition-all",
+              "active:scale-[0.98] group"
+            )}
           >
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
+              <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-secondary/10 blur-2xl" />
+            </div>
+
+            <div className="relative flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-primary/15 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                 <Pizza className="h-8 w-8 text-primary" />
               </div>
               <div className="flex-1 text-left">
-                <h3 className="font-display font-bold text-lg mb-1">
-                  🍕 Monte sua Pizza Meio a Meio
+                <div className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs text-muted-foreground mb-2 bg-background/60">
+                  Personalize do seu jeito
+                </div>
+                <h3 className="font-display font-bold text-lg leading-tight">
+                  🍕 Pizza meio a meio
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  Escolha até {pizzaConfig.settings?.max_flavors} sabores • Preço do sabor mais caro
+                <p className="text-sm text-muted-foreground mt-1">
+                  Até {halfHalfCategorySetting?.max_flavors ?? 2} sabores • {
+                    halfHalfCategorySetting?.half_half_pricing_rule === 'highest'
+                      ? 'cobra o sabor mais caro'
+                      : halfHalfCategorySetting?.half_half_pricing_rule === 'average'
+                        ? 'cobra a média dos sabores'
+                        : 'cobra proporcional (metade de cada)'
+                  }
                 </p>
               </div>
               <ChevronRight className="h-6 w-6 text-primary flex-shrink-0 group-hover:translate-x-1 transition-transform" />
@@ -2101,19 +2077,19 @@ function PublicMenuContent() {
 
       {/* Half-Half Pizza Modal */}
       {pizzaProducts.length >= 2 && (
-        <HalfHalfPizzaModal
-          open={halfHalfModalOpen}
-          onClose={() => setHalfHalfModalOpen(false)}
-          pizzaProducts={pizzaProducts}
-          maxFlavors={pizzaConfig.settings?.max_flavors ?? 2}
-          enableCrust={pizzaConfig.settings?.enable_crust ?? true}
-          enableAddons={pizzaConfig.settings?.enable_addons ?? true}
-          allowCrustExtraPrice={pizzaConfig.settings?.allow_crust_extra_price ?? true}
-          companyId={company.id}
-          pricingRule={(Object.values(pizzaConfig.categorySettings || {})[0]?.half_half_pricing_rule as 'highest' | 'average' | 'sum') ?? 'average'}
-          discountPercentage={Object.values(pizzaConfig.categorySettings || {})[0]?.half_half_discount_percentage ?? 0}
-          optionsSource={(Object.values(pizzaConfig.categorySettings || {})[0]?.half_half_options_source as 'highest' | 'lowest' | 'first') ?? 'highest'}
-        />
+          <HalfHalfPizzaModal
+            open={halfHalfModalOpen}
+            onClose={() => setHalfHalfModalOpen(false)}
+            pizzaProducts={pizzaProducts}
+            maxFlavors={halfHalfCategorySetting?.max_flavors ?? 2}
+            enableCrust={pizzaConfig.settings?.enable_crust ?? true}
+            enableAddons={pizzaConfig.settings?.enable_addons ?? true}
+            allowCrustExtraPrice={pizzaConfig.settings?.allow_crust_extra_price ?? true}
+            companyId={company.id}
+            pricingRule={(halfHalfCategorySetting?.half_half_pricing_rule as 'highest' | 'average' | 'sum') ?? 'average'}
+            discountPercentage={halfHalfCategorySetting?.half_half_discount_percentage ?? 0}
+            optionsSource={(halfHalfCategorySetting?.half_half_options_source as 'highest' | 'lowest' | 'first') ?? 'highest'}
+          />
       )}
 
       {/* Combo Modal */}
