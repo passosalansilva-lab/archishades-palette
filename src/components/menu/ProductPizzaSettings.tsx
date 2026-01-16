@@ -99,16 +99,25 @@ export function ProductPizzaSettings({
       const groups = groupsRes.data || [];
       const options = optionsRes.data || [];
       
-      // Find pizza-specific groups
-      const sizeG = groups.find(g => g.name === 'Tamanho' || g.name === 'Tamanhos');
-      const doughG = groups.find(g => g.name.toLowerCase().includes('massa') || g.name === 'Massas');
-      const crustG = groups.find(g => g.name.toLowerCase().includes('borda') || g.name === 'Bordas');
+      // Find pizza-specific groups with broader matching
+      const sizeG = groups.find(g => {
+        const name = (g.name || '').toLowerCase().trim();
+        return name === 'tamanho' || name === 'tamanhos' || name.includes('tamanho');
+      });
+      const doughG = groups.find(g => {
+        const name = (g.name || '').toLowerCase().trim();
+        return name.includes('massa') || name === 'massas' || name === 'tipo de massa';
+      });
+      const crustG = groups.find(g => {
+        const name = (g.name || '').toLowerCase().trim();
+        return name.includes('borda') || name === 'bordas';
+      });
       
       setSizeGroup(sizeG || null);
       setDoughGroup(doughG || null);
       setCrustGroup(crustG || null);
       
-      // Set custom group names
+      // Set custom group names from database
       if (doughG) setDoughGroupName(doughG.name);
       if (crustG) setCrustGroupName(crustG.name);
       
