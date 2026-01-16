@@ -54,30 +54,42 @@ serve(async (req) => {
     let imageModel: string;
 
     if (aiProvider === "lovable") {
+      // Use the secret from Supabase secrets (set via Lovable dashboard)
       apiKey = Deno.env.get("LOVABLE_API_KEY") || "";
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       apiEndpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
       model = "google/gemini-2.5-flash";
       imageModel = "google/gemini-2.5-flash-image-preview";
     } else if (aiProvider === "openai") {
       apiKey = customApiKey;
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({ error: "API Key da OpenAI não configurada nas configurações do sistema" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       apiEndpoint = "https://api.openai.com/v1/chat/completions";
       model = "gpt-4o";
-      imageModel = "gpt-4o"; // OpenAI uses same model for image generation
+      imageModel = "gpt-4o";
     } else if (aiProvider === "google") {
       apiKey = customApiKey;
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({ error: "API Key do Google não configurada nas configurações do sistema" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       apiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
       model = "gemini-2.0-flash";
       imageModel = "gemini-2.0-flash";
     } else {
       return new Response(
         JSON.stringify({ error: "Provedor de IA não suportado" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "API Key de IA não configurada" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
