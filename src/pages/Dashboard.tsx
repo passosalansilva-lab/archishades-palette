@@ -94,6 +94,32 @@ export default function Dashboard() {
   const [period, setPeriod] = useState<PeriodFilter>('today');
   const [exporting, setExporting] = useState(false);
 
+  const DESKTOP_APP_DOWNLOAD_URL =
+    'https://github.com/passosalansilva-lab/archive/releases/download/untagged-62a4d689b36cb89f7514/CardpOnDelivery.exe';
+
+  const [desktopAppDownloaded, setDesktopAppDownloaded] = useState(() => {
+    try {
+      return localStorage.getItem('desktop-app-downloaded') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [desktopDownloadFrameUrl, setDesktopDownloadFrameUrl] = useState<string | null>(null);
+
+  const handleDesktopAppDownload = () => {
+    setDesktopAppDownloaded(true);
+
+    try {
+      localStorage.setItem('desktop-app-downloaded', 'true');
+    } catch {
+      // ignore
+    }
+
+    // Use a hidden iframe to trigger the file download without navigating away to GitHub.
+    setDesktopDownloadFrameUrl(DESKTOP_APP_DOWNLOAD_URL);
+    window.setTimeout(() => setDesktopDownloadFrameUrl(null), 5000);
+  };
   const {
     companyId,
     companyName,
@@ -408,22 +434,20 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              {!localStorage.getItem('desktop-app-downloaded') && (
-                <Button 
-                  className="gradient-primary gap-2"
-                  asChild
-                >
-                  <a 
-                    href="https://github.com/passosalansilva-lab/archive/releases/download/untagged-62a4d689b36cb89f7514/CardpOnDelivery.exe"
-                    download
-                    onClick={() => localStorage.setItem('desktop-app-downloaded', 'true')}
-                  >
-                    <Download className="h-4 w-4" />
-                    Baixar para Windows
-                  </a>
-                </Button>
+              {desktopDownloadFrameUrl && (
+                <iframe
+                  title="desktop-download"
+                  src={desktopDownloadFrameUrl}
+                  className="hidden"
+                />
               )}
-              {localStorage.getItem('desktop-app-downloaded') && (
+
+              {!desktopAppDownloaded ? (
+                <Button className="gradient-primary gap-2" onClick={handleDesktopAppDownload}>
+                  <Download className="h-4 w-4" />
+                  Baixar para Windows
+                </Button>
+              ) : (
                 <span className="text-sm text-muted-foreground flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
                   Já baixado
