@@ -17,6 +17,10 @@ CREATE INDEX IF NOT EXISTS idx_promotion_sizes_option_id ON promotion_sizes(prod
 -- Enable RLS
 ALTER TABLE promotion_sizes ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Company owners can manage promotion sizes" ON promotion_sizes;
+DROP POLICY IF EXISTS "Anyone can read promotion sizes" ON promotion_sizes;
+
 -- Policy for company owners to manage their promotion sizes
 CREATE POLICY "Company owners can manage promotion sizes"
   ON promotion_sizes FOR ALL
