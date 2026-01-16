@@ -257,6 +257,57 @@ export function ProductPizzaSettings({
     }
   };
 
+  // Auto-save group settings when changed
+  const updateGroupSettings = async (
+    type: 'dough' | 'crust',
+    field: 'is_required' | 'max_selections',
+    value: boolean | number
+  ) => {
+    const group = type === 'dough' ? doughGroup : crustGroup;
+    if (!group) return;
+    
+    // Update local state immediately
+    const newSettings = { ...settings! };
+    if (type === 'dough') {
+      if (field === 'is_required') newSettings.dough_is_required = value as boolean;
+      else newSettings.dough_max_selections = value as number;
+    } else {
+      if (field === 'is_required') newSettings.crust_is_required = value as boolean;
+      else newSettings.crust_max_selections = value as number;
+    }
+    setSettings(newSettings);
+    
+    // Prepare update payload for the group
+    const maxSel = type === 'dough' 
+      ? (field === 'max_selections' ? value as number : newSettings.dough_max_selections)
+      : (field === 'max_selections' ? value as number : newSettings.crust_max_selections);
+    const isReq = type === 'dough'
+      ? (field === 'is_required' ? value as boolean : newSettings.dough_is_required)
+      : (field === 'is_required' ? value as boolean : newSettings.crust_is_required);
+    
+    try {
+      // Update group in database (source of truth)
+      await supabase.from('product_option_groups').update({
+        is_required: isReq,
+        max_selections: maxSel,
+        selection_type: maxSel > 1 ? 'multiple' : 'single',
+      }).eq('id', group.id);
+      
+      // Also sync to pizza_product_settings for consistency
+      if (newSettings.id) {
+        await supabase.from('pizza_product_settings').update({
+          [`${type}_is_required`]: isReq,
+          [`${type}_max_selections`]: maxSel,
+        }).eq('id', newSettings.id);
+      }
+      
+      toast({ title: 'Configuração salva', duration: 1500 });
+    } catch (error: any) {
+      console.error('Error saving group settings:', error);
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const saveSettings = async () => {
     if (!settings) return;
     setSaving(true);
@@ -378,11 +429,11 @@ export function ProductPizzaSettings({
                   <CardContent className="space-y-3 pt-4">
                     <div className="flex items-center justify-between">
                       <div><p className="text-sm font-medium">Obrigatório</p><p className="text-xs text-muted-foreground">Cliente deve escolher</p></div>
-                      <Switch checked={settings.dough_is_required} onCheckedChange={(v) => setSettings(p => p ? { ...p, dough_is_required: v } : null)} />
+                      <Switch checked={settings.dough_is_required} onCheckedChange={(v) => updateGroupSettings('dough', 'is_required', v)} />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm">Tipo de seleção</Label>
-                      <Select value={String(settings.dough_max_selections)} onValueChange={(v) => setSettings(p => p ? { ...p, dough_max_selections: parseInt(v) } : null)}>
+                      <Select value={String(settings.dough_max_selections)} onValueChange={(v) => updateGroupSettings('dough', 'max_selections', parseInt(v))}>
                         <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="1">Seleção única</SelectItem>
@@ -445,11 +496,11 @@ export function ProductPizzaSettings({
                   <CardContent className="space-y-3 pt-4">
                     <div className="flex items-center justify-between">
                       <div><p className="text-sm font-medium">Obrigatório</p><p className="text-xs text-muted-foreground">Cliente deve escolher</p></div>
-                      <Switch checked={settings.crust_is_required} onCheckedChange={(v) => setSettings(p => p ? { ...p, crust_is_required: v } : null)} />
+                      <Switch checked={settings.crust_is_required} onCheckedChange={(v) => updateGroupSettings('crust', 'is_required', v)} />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm">Tipo de seleção</Label>
-                      <Select value={String(settings.crust_max_selections)} onValueChange={(v) => setSettings(p => p ? { ...p, crust_max_selections: parseInt(v) } : null)}>
+                      <Select value={String(settings.crust_max_selections)} onValueChange={(v) => updateGroupSettings('crust', 'max_selections', parseInt(v))}>
                         <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="1">Seleção única</SelectItem>
