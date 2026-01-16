@@ -1230,7 +1230,11 @@ function PublicMenuContent() {
     ...p,
     price: getDisplayPrice(p),
   }));
-  const canShowHalfHalf = pizzaProducts.length >= 2;
+  // Verifica se pelo menos uma categoria de pizza permite meio a meio
+  const hasHalfHalfEnabled = Object.values(pizzaConfig.categorySettings || {}).some(
+    (cs) => cs.allow_half_half === true
+  );
+  const canShowHalfHalf = pizzaProducts.length >= 2 && hasHalfHalfEnabled;
 
   const scrollToCategory = (categoryId: string | null) => {
     setSelectedCategory(categoryId);

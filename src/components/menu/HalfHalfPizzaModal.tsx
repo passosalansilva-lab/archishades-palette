@@ -82,8 +82,6 @@ export function HalfHalfPizzaModal({
   discountPercentage = 0,
   optionsSource = 'highest',
 }: HalfHalfPizzaModalProps) {
-  // Debug: verificar qual regra está sendo usada
-  console.log('[HalfHalfPizzaModal] pricingRule recebida:', pricingRule);
   const { addItem } = useCart();
   const [step, setStep] = useState<"size" | "flavors" | "options">("size");
   const [selectedFlavors, setSelectedFlavors] = useState<Product[]>([]);

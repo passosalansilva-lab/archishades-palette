@@ -86,8 +86,6 @@ export function usePizzaConfig(companyId: string | null): PizzaConfig {
           }
         }
 
-        console.log('[usePizzaConfig] categorySettings carregadas:', categorySettingsMap);
-        
         setConfig({
           settings: settings || null,
           categorySettings: categorySettingsMap,
