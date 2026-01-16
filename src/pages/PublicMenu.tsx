@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Clock,
@@ -177,6 +177,13 @@ function hexToHsl(hex: string): string | null {
   const ss = Math.round(s * 100);
   const ll = Math.round(l * 100);
   return `${hh} ${ss}% ${ll}%`;
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
 }
 
 function PublicMenuContent() {
@@ -1250,6 +1257,13 @@ function PublicMenuContent() {
   const hasHalfHalfEnabled = !!halfHalfCategorySetting?.allow_half_half;
   const hasEnoughFlavorsForHalfHalf = pizzaProducts.length >= 2;
   const canShowHalfHalf = hasHalfHalfEnabled && hasEnoughFlavorsForHalfHalf;
+  
+  // Menor preço entre pizzas disponíveis para meio-a-meio
+  const lowestHalfHalfPrice = useMemo(() => {
+    if (!canShowHalfHalf || pizzaProducts.length === 0) return 0;
+    const prices = pizzaProducts.map((p) => p.price).filter((price) => price > 0);
+    return prices.length > 0 ? Math.min(...prices) : 0;
+  }, [canShowHalfHalf, pizzaProducts]);
 
   const scrollToCategory = (categoryId: string | null) => {
     setSelectedCategory(categoryId);
@@ -1893,6 +1907,11 @@ function PublicMenuContent() {
                 <h3 className="font-display font-bold text-lg leading-tight">
                   🍕 Pizza meio a meio
                 </h3>
+                {lowestHalfHalfPrice > 0 && (
+                  <p className="text-sm font-semibold text-primary mt-1">
+                    A partir de {formatCurrency(lowestHalfHalfPrice)}
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground mt-1">
                   Até {halfHalfCategorySetting?.max_flavors ?? 2} sabores • {
                     halfHalfCategorySetting?.half_half_pricing_rule === 'highest'
