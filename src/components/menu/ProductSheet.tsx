@@ -286,6 +286,7 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
         acaiCategoryResult,
         acaiSizesResult,
         pizzaCategoryResult,
+        pizzaCategorySettingsResult,
       ] = await Promise.all([
         supabase
           .from('product_option_groups')
