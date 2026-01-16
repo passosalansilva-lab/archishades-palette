@@ -151,7 +151,8 @@ export default function MenuManagement() {
     halfHalfPricingRule: 'average' | 'highest' | 'sum';
     maxFlavors: number;
     halfHalfOptionsSource: 'highest' | 'lowest' | 'first';
-  }>({ allowHalfHalf: true, halfHalfPricingRule: 'average', maxFlavors: 2, halfHalfOptionsSource: 'highest' });
+    halfHalfAddonsSource: 'highest' | 'lowest' | 'first';
+  }>({ allowHalfHalf: true, halfHalfPricingRule: 'average', maxFlavors: 2, halfHalfOptionsSource: 'highest', halfHalfAddonsSource: 'highest' });
 
   const [comboSheet, setComboSheet] = useState<{
     open: boolean;
@@ -542,6 +543,7 @@ export default function MenuManagement() {
               half_half_pricing_rule: pizzaCategoryDialogSettings.halfHalfPricingRule,
               max_flavors: pizzaCategoryDialogSettings.maxFlavors,
               half_half_options_source: pizzaCategoryDialogSettings.halfHalfOptionsSource,
+              half_half_addons_source: pizzaCategoryDialogSettings.halfHalfAddonsSource,
             } as any, { onConflict: 'category_id' });
           if (settingsError) throw settingsError;
         }
@@ -582,6 +584,7 @@ export default function MenuManagement() {
               half_half_pricing_rule: pizzaCategoryDialogSettings.halfHalfPricingRule,
               max_flavors: pizzaCategoryDialogSettings.maxFlavors,
               half_half_options_source: pizzaCategoryDialogSettings.halfHalfOptionsSource,
+              half_half_addons_source: pizzaCategoryDialogSettings.halfHalfAddonsSource,
             } as any);
           if (settingsError) throw settingsError;
         }
@@ -601,7 +604,7 @@ export default function MenuManagement() {
       
       setCategoryDialog({ open: false, category: null });
       setCategoryType('normal');
-      setPizzaCategoryDialogSettings({ allowHalfHalf: true, halfHalfPricingRule: 'average', maxFlavors: 2, halfHalfOptionsSource: 'highest' });
+      setPizzaCategoryDialogSettings({ allowHalfHalf: true, halfHalfPricingRule: 'average', maxFlavors: 2, halfHalfOptionsSource: 'highest', halfHalfAddonsSource: 'highest' });
       await loadData();
     } catch (error: any) {
       console.error(error);
@@ -1170,6 +1173,7 @@ export default function MenuManagement() {
                                         halfHalfPricingRule: (data.half_half_pricing_rule as 'average' | 'highest' | 'sum') || 'average',
                                         maxFlavors: data.max_flavors || 2,
                                         halfHalfOptionsSource: ((data as any).half_half_options_source as 'highest' | 'lowest' | 'first') || 'highest',
+                                        halfHalfAddonsSource: ((data as any).half_half_addons_source as 'highest' | 'lowest' | 'first') || 'highest',
                                       });
                                     } else {
                                       setPizzaCategoryDialogSettings({
@@ -1177,6 +1181,7 @@ export default function MenuManagement() {
                                         halfHalfPricingRule: 'average',
                                         maxFlavors: 2,
                                         halfHalfOptionsSource: 'highest',
+                                        halfHalfAddonsSource: 'highest',
                                       });
                                     }
                                   }
@@ -1669,6 +1674,93 @@ export default function MenuManagement() {
                                 <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-help" />
                                 <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                                   Usa as opções do primeiro sabor que o cliente selecionar
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-sm font-medium">Primeiro</p>
+                            <p className="text-xs text-muted-foreground">primeiro selecionado</p>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Origem dos adicionais</label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Define de qual sabor serão usados os adicionais no meio a meio
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            className={cn(
+                              "p-2 rounded-lg border-2 text-center transition-all relative group",
+                              pizzaCategoryDialogSettings.halfHalfAddonsSource === 'highest'
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() =>
+                              setPizzaCategoryDialogSettings((prev) => ({
+                                ...prev,
+                                halfHalfAddonsSource: 'highest',
+                              }))
+                            }
+                          >
+                            <div className="absolute top-1 right-1">
+                              <div className="relative">
+                                <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-help" />
+                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                  Usa os adicionais do sabor mais caro selecionado
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-sm font-medium">Mais caro</p>
+                            <p className="text-xs text-muted-foreground">sabor de maior valor</p>
+                          </button>
+                          <button
+                            type="button"
+                            className={cn(
+                              "p-2 rounded-lg border-2 text-center transition-all relative group",
+                              pizzaCategoryDialogSettings.halfHalfAddonsSource === 'lowest'
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() =>
+                              setPizzaCategoryDialogSettings((prev) => ({
+                                ...prev,
+                                halfHalfAddonsSource: 'lowest',
+                              }))
+                            }
+                          >
+                            <div className="absolute top-1 right-1">
+                              <div className="relative">
+                                <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-help" />
+                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                  Usa os adicionais do sabor mais barato selecionado
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-sm font-medium">Mais barato</p>
+                            <p className="text-xs text-muted-foreground">sabor de menor valor</p>
+                          </button>
+                          <button
+                            type="button"
+                            className={cn(
+                              "p-2 rounded-lg border-2 text-center transition-all relative group",
+                              pizzaCategoryDialogSettings.halfHalfAddonsSource === 'first'
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            )}
+                            onClick={() =>
+                              setPizzaCategoryDialogSettings((prev) => ({
+                                ...prev,
+                                halfHalfAddonsSource: 'first',
+                              }))
+                            }
+                          >
+                            <div className="absolute top-1 right-1">
+                              <div className="relative">
+                                <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-help" />
+                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                  Usa os adicionais do primeiro sabor que o cliente selecionar
                                 </div>
                               </div>
                             </div>
