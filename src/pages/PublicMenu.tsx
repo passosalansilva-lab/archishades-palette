@@ -1153,18 +1153,20 @@ function PublicMenuContent() {
     : [];
 
   const getDisplayPrice = (product: Product) => {
-    // Priorizar sempre o preço definido no próprio produto
-    if (Number(product.price) > 0) {
-      return Number(product.price);
-    }
-    // Se o produto não tiver preço (0), usar o preço base da categoria (pizza ou açaí)
+    // Para pizzas e açaí com tamanhos configurados, priorizar o preço do tamanho
     if (product.category_id) {
+      // Pizza com tamanhos configurados - usar preço do menor tamanho
       if (pizzaCategoryBasePrices[product.category_id]) {
         return pizzaCategoryBasePrices[product.category_id];
       }
+      // Açaí com tamanhos configurados - usar preço do maior tamanho
       if (acaiCategoryBasePrices[product.category_id]) {
         return acaiCategoryBasePrices[product.category_id];
       }
+    }
+    // Fallback para o preço do produto
+    if (Number(product.price) > 0) {
+      return Number(product.price);
     }
     return 0;
   };
