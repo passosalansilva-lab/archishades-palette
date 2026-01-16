@@ -2106,6 +2106,9 @@ function PublicMenuContent() {
           enableAddons={pizzaConfig.settings?.enable_addons ?? true}
           allowCrustExtraPrice={pizzaConfig.settings?.allow_crust_extra_price ?? true}
           companyId={company.id}
+          pricingRule={(Object.values(pizzaConfig.categorySettings || {})[0]?.half_half_pricing_rule as 'highest' | 'average' | 'sum') ?? 'average'}
+          discountPercentage={Object.values(pizzaConfig.categorySettings || {})[0]?.half_half_discount_percentage ?? 0}
+          optionsSource={(Object.values(pizzaConfig.categorySettings || {})[0]?.half_half_options_source as 'highest' | 'lowest' | 'first') ?? 'highest'}
         />
       )}
 

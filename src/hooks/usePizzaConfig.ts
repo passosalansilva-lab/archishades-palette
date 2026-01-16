@@ -11,8 +11,20 @@ interface PizzaSettings {
   allow_crust_extra_price: boolean;
 }
 
+interface PizzaCategorySettings {
+  id: string;
+  category_id: string;
+  allow_half_half: boolean;
+  max_flavors: number;
+  half_half_pricing_rule: string;
+  half_half_discount_percentage: number;
+  allow_repeated_flavors: boolean;
+  half_half_options_source?: string;
+}
+
 interface PizzaConfig {
   settings: PizzaSettings | null;
+  categorySettings: Record<string, PizzaCategorySettings>;
   pizzaCategoryIds: string[];
   loading: boolean;
   error: Error | null;
@@ -21,6 +33,7 @@ interface PizzaConfig {
 export function usePizzaConfig(companyId: string | null): PizzaConfig {
   const [config, setConfig] = useState<PizzaConfig>({
     settings: null,
+    categorySettings: {},
     pizzaCategoryIds: [],
     loading: true,
     error: null,
@@ -28,7 +41,7 @@ export function usePizzaConfig(companyId: string | null): PizzaConfig {
 
   useEffect(() => {
     if (!companyId) {
-      setConfig({ settings: null, pizzaCategoryIds: [], loading: false, error: null });
+      setConfig({ settings: null, categorySettings: {}, pizzaCategoryIds: [], loading: false, error: null });
       return;
     }
 
@@ -55,9 +68,28 @@ export function usePizzaConfig(companyId: string | null): PizzaConfig {
 
         if (categoriesError) throw categoriesError;
 
+        const categoryIds = pizzaCategories?.map((pc) => pc.category_id) || [];
+
+        // Buscar configurações por categoria
+        let categorySettingsMap: Record<string, PizzaCategorySettings> = {};
+        
+        if (categoryIds.length > 0) {
+          const { data: catSettings } = await supabase
+            .from('pizza_category_settings')
+            .select('*')
+            .in('category_id', categoryIds);
+          
+          if (catSettings) {
+            catSettings.forEach((cs: any) => {
+              categorySettingsMap[cs.category_id] = cs;
+            });
+          }
+        }
+
         setConfig({
           settings: settings || null,
-          pizzaCategoryIds: pizzaCategories?.map((pc) => pc.category_id) || [],
+          categorySettings: categorySettingsMap,
+          pizzaCategoryIds: categoryIds,
           loading: false,
           error: null,
         });
@@ -65,6 +97,7 @@ export function usePizzaConfig(companyId: string | null): PizzaConfig {
         console.error('Error loading pizza config:', error);
         setConfig({
           settings: null,
+          categorySettings: {},
           pizzaCategoryIds: [],
           loading: false,
           error: error,

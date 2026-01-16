@@ -57,6 +57,8 @@ interface HalfHalfPizzaModalProps {
   companyId: string;
   pricingRule?: 'highest' | 'average' | 'sum';
   discountPercentage?: number;
+  /** Define de qual sabor pegar as opções de massa/borda: 'highest' | 'lowest' | 'first' */
+  optionsSource?: 'highest' | 'lowest' | 'first';
 }
 
 interface PizzaSize {
@@ -78,6 +80,7 @@ export function HalfHalfPizzaModal({
   companyId,
   pricingRule = 'average',
   discountPercentage = 0,
+  optionsSource = 'highest',
 }: HalfHalfPizzaModalProps) {
   const { addItem } = useCart();
   const [step, setStep] = useState<"size" | "flavors" | "options">("size");
@@ -159,19 +162,37 @@ export function HalfHalfPizzaModal({
     try {
       setLoading(true);
       
-      // Identificar o sabor mais caro entre os selecionados
-      const mostExpensiveFlavor = selectedFlavors.reduce((prev, curr) =>
-        curr.price > prev.price ? curr : prev,
-      selectedFlavors[0]);
+      // Selecionar o sabor de referência baseado na configuração optionsSource
+      let referenceFlavor: Product | undefined;
+      
+      switch (optionsSource) {
+        case 'lowest':
+          // Sabor mais barato
+          referenceFlavor = selectedFlavors.reduce((prev, curr) =>
+            curr.price < prev.price ? curr : prev,
+          selectedFlavors[0]);
+          break;
+        case 'first':
+          // Primeiro sabor selecionado
+          referenceFlavor = selectedFlavors[0];
+          break;
+        case 'highest':
+        default:
+          // Sabor mais caro
+          referenceFlavor = selectedFlavors.reduce((prev, curr) =>
+            curr.price > prev.price ? curr : prev,
+          selectedFlavors[0]);
+          break;
+      }
 
-      if (!mostExpensiveFlavor) {
+      if (!referenceFlavor) {
         setLoading(false);
         return;
       }
 
-      // Sempre buscar opções (massa, borda, adicionais) a partir da pizza mais cara
-      const productIds = [mostExpensiveFlavor.id];
-      const categoryId = mostExpensiveFlavor.category_id;
+      // Buscar opções (massa, borda, adicionais) a partir do sabor de referência
+      const productIds = [referenceFlavor.id];
+      const categoryId = referenceFlavor.category_id;
 
       // Buscar em paralelo: grupos genéricos de opções + tamanhos específicos de pizza + tipos de massa + bordas
       const [groupsResult, sizesResult, doughTypesResult, crustLinksResult] = await Promise.all([
@@ -208,7 +229,7 @@ export function HalfHalfPizzaModal({
         supabase
           .from("pizza_product_crust_flavors")
           .select("id, product_id, crust_flavor_id, pizza_crust_flavors ( id, name, extra_price, active )")
-          .eq("product_id", mostExpensiveFlavor.id),
+          .eq("product_id", referenceFlavor.id),
       ]);
 
       const { data: groups, error: groupsError } = groupsResult as any;
@@ -700,44 +721,6 @@ export function HalfHalfPizzaModal({
               ) : (
                 <>
                   {doughOptions.length > 0 && (
-                    <div>
-                      <h3 className="font-semibold mb-3">Tipo de massa</h3>
-                      <RadioGroup
-                        onValueChange={(value) => {
-                          const [groupId, optionId] = value.split("::");
-                          const group = doughOptions.find((g) => g.id === groupId);
-                          const option = group?.options?.find((o) => o.id === optionId);
-                          if (group && option) {
-                            handleSingleOptionChange(
-                              group.id,
-                              group.name,
-                              option.id,
-                              option.name,
-                              option.price_modifier,
-                            );
-                          }
-                        }}
-                      >
-                        {doughOptions.map((group) =>
-                          group.options?.map((option) => (
-                            <div key={option.id} className="flex items-center space-x-2 py-2">
-                              <RadioGroupItem value={`${group.id}::${option.id}`} id={`dough-${option.id}`} />
-                              <Label htmlFor={`dough-${option.id}`} className="flex-1 cursor-pointer">
-                                {option.name}
-                                {option.price_modifier > 0 && (
-                                  <span className="ml-2 text-primary font-semibold">
-                                    + R$ {option.price_modifier.toFixed(2)}
-                                  </span>
-                                )}
-                              </Label>
-                            </div>
-                          )),
-                        )}
-                      </RadioGroup>
-                    </div>
-                  )}
-
-                  {crustOptions.length > 0 && (
                     <div>
                       <h3 className="font-semibold mb-3">Tipo de massa</h3>
                       <RadioGroup

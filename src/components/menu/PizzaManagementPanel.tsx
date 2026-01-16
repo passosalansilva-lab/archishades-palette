@@ -70,6 +70,7 @@ interface PizzaCategorySettings {
   half_half_pricing_rule: string;
   half_half_discount_percentage: number;
   allow_repeated_flavors: boolean;
+  half_half_options_source: string;
 }
 
 interface PizzaManagementPanelProps {
@@ -208,13 +209,15 @@ export function PizzaManagementPanel({ open, onClose, companyId }: PizzaManageme
       
       if (error && error.code !== 'PGRST116') throw error;
       
-      setCategorySettings(data || {
+      setCategorySettings({
         category_id: selectedCategoryId,
         allow_half_half: true,
         max_flavors: 2,
         half_half_pricing_rule: 'average',
         half_half_discount_percentage: 0,
         allow_repeated_flavors: false,
+        half_half_options_source: 'highest',
+        ...data,
       });
     } catch (error: any) {
       console.error('Error loading settings:', error);
@@ -964,6 +967,30 @@ export function PizzaManagementPanel({ open, onClose, companyId }: PizzaManageme
                                 {categorySettings.half_half_pricing_rule === 'average' && 'O preço será a média dos sabores escolhidos'}
                                 {categorySettings.half_half_pricing_rule === 'highest' && 'O preço será do sabor mais caro'}
                                 {categorySettings.half_half_pricing_rule === 'sum' && 'O preço será a soma proporcional dos sabores'}
+                              </p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Origem das Opções (Massa/Borda)</Label>
+                              <Select
+                                value={categorySettings.half_half_options_source || 'highest'}
+                                onValueChange={(v) => 
+                                  setCategorySettings({ ...categorySettings, half_half_options_source: v })
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="highest">Sabor mais caro</SelectItem>
+                                  <SelectItem value="lowest">Sabor mais barato</SelectItem>
+                                  <SelectItem value="first">Primeiro sabor selecionado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">
+                                {categorySettings.half_half_options_source === 'highest' && 'Usa as opções de massa e borda do sabor mais caro'}
+                                {categorySettings.half_half_options_source === 'lowest' && 'Usa as opções de massa e borda do sabor mais barato'}
+                                {categorySettings.half_half_options_source === 'first' && 'Usa as opções do primeiro sabor que o cliente selecionar'}
                               </p>
                             </div>
 
