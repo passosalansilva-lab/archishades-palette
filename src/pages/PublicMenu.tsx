@@ -1181,11 +1181,12 @@ function PublicMenuContent() {
   }, [company?.id]);
 
   // Pizza products for half-half (respeita flag por produto)
-  const rawPizzaProducts = pizzaConfig.pizzaCategoryIds.length > 0
+  const pizzaCategoryIdsArray = pizzaConfig?.pizzaCategoryIds || [];
+  const rawPizzaProducts = pizzaCategoryIdsArray.length > 0
     ? products.filter(
         (p) =>
           p.category_id &&
-          pizzaConfig.pizzaCategoryIds.includes(p.category_id) &&
+          pizzaCategoryIdsArray.includes(p.category_id) &&
           !halfHalfDisabledProductIds.includes(p.id)
       )
     : [];
@@ -1822,7 +1823,7 @@ function PublicMenuContent() {
             {featuredProducts.map((product) => {
               const displayPrice = getDisplayPrice(product);
               const isPizzaWithSizes = !!product.category_id && 
-                pizzaConfig.pizzaCategoryIds.includes(product.category_id) && 
+                pizzaCategoryIdsArray.includes(product.category_id) && 
                 !!pizzaCategoryBasePrices[product.id];
               return (
                 <FeaturedProductCard
@@ -1889,7 +1890,7 @@ function PublicMenuContent() {
                    !!acaiCategoryBasePrices[product.category_id];
                  // Pizza mostra "A partir de" se tiver tamanhos configurados POR PRODUTO
                  const isPizzaWithSizes = !!product.category_id && 
-                   pizzaConfig.pizzaCategoryIds.includes(product.category_id) && 
+                   pizzaCategoryIdsArray.includes(product.category_id) && 
                    !!pizzaCategoryBasePrices[product.id];
                  return (
                    <ProductCard
