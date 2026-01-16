@@ -82,6 +82,8 @@ export function HalfHalfPizzaModal({
   discountPercentage = 0,
   optionsSource = 'highest',
 }: HalfHalfPizzaModalProps) {
+  // Debug: verificar qual regra está sendo usada
+  console.log('[HalfHalfPizzaModal] pricingRule recebida:', pricingRule);
   const { addItem } = useCart();
   const [step, setStep] = useState<"size" | "flavors" | "options">("size");
   const [selectedFlavors, setSelectedFlavors] = useState<Product[]>([]);
@@ -575,13 +577,17 @@ export function HalfHalfPizzaModal({
 
       switch (pricingRule) {
         case 'highest':
+          // Cobra o valor do sabor mais caro
           basePrice = Math.max(...prices);
           break;
         case 'sum':
-          basePrice = prices.reduce((sum, p) => sum + p, 0) / selectedFlavors.length;
+          // Soma proporcional: cada sabor contribui com sua fração (metade de cada em caso de 2 sabores)
+          // Resultado é igual à média neste caso, mas a lógica é diferente
+          basePrice = prices.reduce((sum, p) => sum + (p / selectedFlavors.length), 0);
           break;
         case 'average':
         default:
+          // Média: soma todos e divide pelo número de sabores
           basePrice = prices.reduce((sum, p) => sum + p, 0) / selectedFlavors.length;
           break;
       }
