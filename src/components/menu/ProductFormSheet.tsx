@@ -463,6 +463,9 @@ export function ProductFormSheet({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [loadingOptions, setLoadingOptions] = useState(false);
   
+  // AI settings state
+  const [aiConfigured, setAiConfigured] = useState(false);
+  
   // Recipe editor state
   const [recipeEditorOpen, setRecipeEditorOpen] = useState(false);
 
@@ -520,6 +523,29 @@ export function ProductFormSheet({
       setHasPendingDraft(true);
     }
   }, [getDraft]);
+
+  // Check AI configuration
+  useEffect(() => {
+    const checkAiConfig = async () => {
+      const { data } = await supabase
+        .from('system_settings')
+        .select('key, value')
+        .in('key', ['ai_enabled', 'ai_api_key']);
+      
+      const settings: Record<string, string> = {};
+      data?.forEach((s) => {
+        settings[s.key] = s.value || '';
+      });
+      
+      const isEnabled = settings['ai_enabled'] === 'true';
+      const hasApiKey = Boolean(settings['ai_api_key']);
+      setAiConfigured(isEnabled && hasApiKey);
+    };
+    
+    if (open && isPizzaCategory) {
+      checkAiConfig();
+    }
+  }, [open, isPizzaCategory]);
 
   // Initialize form when product changes
   useEffect(() => {
@@ -1253,7 +1279,7 @@ export function ProductFormSheet({
                     showGallery
                     companyId={companyId}
                   />
-                  {isPizzaCategory && productForm.image_url && (
+                  {isPizzaCategory && productForm.image_url && aiConfigured && (
                     <PizzaSlicerButton
                       imageUrl={productForm.image_url}
                       onSlicesGenerated={(slices) => {
