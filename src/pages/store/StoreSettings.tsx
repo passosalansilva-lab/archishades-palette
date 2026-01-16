@@ -63,9 +63,8 @@ const companySchema = z.object({
   city: z.string().max(100).optional(),
   state: z.string().max(2).optional(),
   zipCode: z.string().max(10).optional(),
-  niche: z
-    .enum(['pizzaria', 'hamburgueria', 'restaurante', 'lanchonete', 'cafeteria', 'outro'])
-    .optional(),
+  niche: z.string().max(100).optional(),
+  nicheCustom: z.string().max(100).optional(),
   deliveryFee: z.coerce.number().min(0).default(0),
   minOrderValue: z.coerce.number().min(0).default(0),
   primaryColor: z.string().default('#10B981'),
@@ -199,6 +198,10 @@ export default function StoreSettings() {
         } else {
           setOperatingHours(DEFAULT_HOURS);
         }
+        // Check if niche is a predefined value or custom
+        const predefinedNiches = ['pizzaria', 'hamburgueria', 'restaurante', 'lanchonete', 'cafeteria', 'doceria', 'sorveteria', 'acaiteria', 'padaria', 'sushi', 'churrascaria', 'petiscaria', 'pastelaria', 'marmitaria', 'foodtruck', 'outro'];
+        const isCustomNiche = data.niche && !predefinedNiches.includes(data.niche);
+        
         reset({
           name: data.name,
           slug: data.slug,
@@ -209,7 +212,8 @@ export default function StoreSettings() {
           city: data.city || '',
           state: data.state || '',
           zipCode: data.zip_code || '',
-          niche: (data.niche as CompanyFormData['niche']) || undefined,
+          niche: isCustomNiche ? 'outro' : (data.niche || undefined),
+          nicheCustom: isCustomNiche ? data.niche : '',
           deliveryFee: Number(data.delivery_fee) || 0,
           minOrderValue: Number(data.min_order_value) || 0,
           primaryColor: data.primary_color || '#10B981',
@@ -268,7 +272,7 @@ export default function StoreSettings() {
         pix_key: data.pixKey || null,
         pix_key_type: data.pixKeyType || null,
         opening_hours: operatingHours as unknown as Json,
-        niche: data.niche || null,
+        niche: data.niche === 'outro' && data.nicheCustom ? data.nicheCustom : (data.niche || null),
         auto_print_kitchen: autoPrintKitchen,
         auto_print_mode: autoPrintMode,
         show_floating_orders_button: showFloatingOrdersButton,
@@ -383,6 +387,7 @@ export default function StoreSettings() {
         state: (data.uf || '').toUpperCase(),
         zipCode: cepRaw,
         niche: watch('niche'),
+        nicheCustom: watch('nicheCustom'),
         deliveryFee: watch('deliveryFee'),
         minOrderValue: watch('minOrderValue'),
         primaryColor: watch('primaryColor'),
@@ -727,12 +732,32 @@ export default function StoreSettings() {
                         <option value="restaurante">Restaurante</option>
                         <option value="lanchonete">Lanchonete</option>
                         <option value="cafeteria">Cafeteria</option>
-                        <option value="outro">Outro</option>
+                        <option value="doceria">Doceria</option>
+                        <option value="sorveteria">Sorveteria</option>
+                        <option value="acaiteria">Açaíteria</option>
+                        <option value="padaria">Padaria</option>
+                        <option value="sushi">Sushi / Japonês</option>
+                        <option value="churrascaria">Churrascaria</option>
+                        <option value="petiscaria">Petiscaria / Bar</option>
+                        <option value="pastelaria">Pastelaria</option>
+                        <option value="marmitaria">Marmitaria</option>
+                        <option value="foodtruck">Food Truck</option>
+                        <option value="outro">Outro (personalizado)</option>
                       </select>
                       {errors.niche && (
                         <p className="text-sm text-destructive">{errors.niche.message}</p>
                       )}
                     </div>
+                    {watch('niche') === 'outro' && (
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="nicheCustom">Nome do nicho personalizado</Label>
+                        <Input
+                          id="nicheCustom"
+                          placeholder="Ex: Comida Árabe, Temakeria, etc."
+                          {...register('nicheCustom')}
+                        />
+                      </div>
+                    )}
                     <div className="space-y-2 sm:col-span-1">
                       <Label htmlFor="phone">Telefone</Label>
                       <Input
