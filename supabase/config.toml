@@ -278,3 +278,6 @@ verify_jwt = false
 
 [functions.create-checkout]
 verify_jwt = false
+
+[functions.slice-pizza-image]
+verify_jwt = false

@@ -5,6 +5,7 @@ import { ProductRecipeEditor } from '@/components/inventory/ProductRecipeEditor'
 import { ProductIngredientsEditor } from '@/components/menu/ProductIngredientsEditor';
 import { ProductTagsEditor } from '@/components/menu/ProductTagsEditor';
 import { ProductPizzaSettings } from '@/components/menu/ProductPizzaSettings';
+import { PizzaSlicerButton } from '@/components/menu/PizzaSlicerButton';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
@@ -1252,6 +1253,17 @@ export function ProductFormSheet({
                     showGallery
                     companyId={companyId}
                   />
+                  {isPizzaCategory && productForm.image_url && (
+                    <PizzaSlicerButton
+                      imageUrl={productForm.image_url}
+                      onSlicesGenerated={(slices) => {
+                        // For now, store slices info in console - can be extended to save to DB
+                        console.log('Generated pizza slices:', slices);
+                        // Future: save slices to product_pizza_slices table
+                      }}
+                      defaultSlices={8}
+                    />
+                  )}
                 </div>
               </div>
             </div>
