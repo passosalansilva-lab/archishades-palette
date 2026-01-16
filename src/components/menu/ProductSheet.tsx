@@ -285,6 +285,7 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
         globalCrustFlavorsResult,
         acaiCategoryResult,
         acaiSizesResult,
+        pizzaCategoryResult,
       ] = await Promise.all([
         supabase
           .from('product_option_groups')
@@ -300,7 +301,7 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
         categoryId
           ? supabase
               .from('pizza_category_sizes')
-              .select('id, name, base_price, max_flavors, sort_order')
+              .select('id, name, base_price, max_flavors, slices, sort_order')
               .eq('category_id', categoryId)
               .order('sort_order')
           : Promise.resolve({ data: null, error: null } as any),
@@ -330,6 +331,13 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
               .eq('category_id', categoryId)
               .order('sort_order')
           : Promise.resolve({ data: null, error: null } as any),
+        categoryId
+          ? supabase
+              .from('pizza_categories')
+              .select('category_id')
+              .eq('category_id', categoryId)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null } as any),
       ]);
 
       const { data: groupsData, error: groupsError } = groupsResult as any;
@@ -340,6 +348,7 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
       const { data: globalCrustFlavors, error: globalCrustFlavorsError } = globalCrustFlavorsResult as any;
       const { data: acaiCategoryData, error: acaiCategoryError } = acaiCategoryResult as any;
       const { data: acaiSizesData, error: acaiSizesError } = acaiSizesResult as any;
+      const { data: pizzaCategoryData, error: pizzaCategoryError } = pizzaCategoryResult as any;
 
       if (groupsError) throw groupsError;
       if (optionsError) throw optionsError;
@@ -349,9 +358,12 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
       if (globalCrustFlavorsError) throw globalCrustFlavorsError;
       if (acaiCategoryError) throw acaiCategoryError;
       if (acaiSizesError) throw acaiSizesError;
+      if (pizzaCategoryError) throw pizzaCategoryError;
 
       const isAcaiCategory = !!acaiCategoryData;
+      const isPizzaCategory = !!pizzaCategoryData;
       const hasAcaiSizes = isAcaiCategory && acaiSizesData && Array.isArray(acaiSizesData) && acaiSizesData.length > 0;
+      const hasPizzaSizes = isPizzaCategory && sizesData && Array.isArray(sizesData) && sizesData.length > 0;
 
       const groups: OptionGroup[] = (groupsData || []).map((group: any) => ({
         ...group,
@@ -379,14 +391,11 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
         });
       }
 
-      const normalizedName = product.name.toLowerCase();
-      const isPizzaProduct = normalizedName.includes('pizza');
-
-      if (isPizzaProduct && sizesData && Array.isArray(sizesData) && sizesData.length > 0) {
+      if (hasPizzaSizes) {
         const sizeGroup: OptionGroup = {
           id: 'pizza-size',
           name: 'Tamanho',
-          description: null,
+          description: 'Selecione o tamanho da pizza',
           is_required: true,
           min_selections: 1,
           max_selections: 1,
@@ -397,6 +406,7 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
           options: (sizesData as any[]).map((size) => ({
             id: size.id,
             name: size.name,
+            description: size.slices ? `${size.slices} pedaços` : (size.max_flavors ? `Até ${size.max_flavors} sabores` : null),
             price_modifier: Number(size.base_price ?? 0),
             is_required: true,
             is_available: true,
@@ -513,7 +523,7 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
         });
       }
 
-      if (isPizzaProduct && doughTypes && Array.isArray(doughTypes) && doughTypes.length > 0) {
+      if (isPizzaCategory && doughTypes && Array.isArray(doughTypes) && doughTypes.length > 0) {
         const doughGroup: OptionGroup = {
           id: 'pizza-dough',
           name: 'Tipo de massa',
@@ -538,7 +548,7 @@ export function ProductSheet({ product, open, onClose, primaryColor }: ProductSh
         groups.push(doughGroup);
       }
 
-      if (isPizzaProduct) {
+      if (isPizzaCategory) {
         let crustFlavorOptions: ProductOption[] = [];
 
         if (crustLinks && Array.isArray(crustLinks) && crustLinks.length > 0) {

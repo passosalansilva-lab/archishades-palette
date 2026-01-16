@@ -249,6 +249,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
         globalCrustFlavorsResult,
         acaiCategoryResult,
         acaiSizesResult,
+        pizzaCategoryResult,
       ] = await Promise.all([
         supabase
           .from('product_option_groups')
@@ -264,7 +265,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
         categoryId
           ? supabase
               .from('pizza_category_sizes')
-              .select('id, name, base_price, max_flavors, sort_order')
+              .select('id, name, base_price, max_flavors, slices, sort_order')
               .eq('category_id', categoryId)
               .order('sort_order')
           : Promise.resolve({ data: null, error: null } as any),
@@ -294,6 +295,13 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
               .eq('category_id', categoryId)
               .order('sort_order')
           : Promise.resolve({ data: null, error: null } as any),
+        categoryId
+          ? supabase
+              .from('pizza_categories')
+              .select('category_id')
+              .eq('category_id', categoryId)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null } as any),
       ]);
 
       const { data: groupsData, error: groupsError } = groupsResult as any;
@@ -304,6 +312,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
       const { data: globalCrustFlavors, error: globalCrustFlavorsError } = globalCrustFlavorsResult as any;
       const { data: acaiCategoryData, error: acaiCategoryError } = acaiCategoryResult as any;
       const { data: acaiSizesData, error: acaiSizesError } = acaiSizesResult as any;
+      const { data: pizzaCategoryData, error: pizzaCategoryError } = pizzaCategoryResult as any;
 
       if (groupsError) throw groupsError;
       if (optionsError) throw optionsError;
@@ -313,9 +322,12 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
       if (globalCrustFlavorsError) throw globalCrustFlavorsError;
       if (acaiCategoryError) throw acaiCategoryError;
       if (acaiSizesError) throw acaiSizesError;
+      if (pizzaCategoryError) throw pizzaCategoryError;
 
       const isAcaiCategory = !!acaiCategoryData;
+      const isPizzaCategory = !!pizzaCategoryData;
       const hasAcaiSizes = isAcaiCategory && acaiSizesData && Array.isArray(acaiSizesData) && acaiSizesData.length > 0;
+      const hasPizzaSizes = isPizzaCategory && sizesData && Array.isArray(sizesData) && sizesData.length > 0;
 
       const groups: OptionGroup[] = (groupsData || []).map((group: any) => ({
         ...group,
@@ -343,15 +355,13 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
         });
       }
 
-      const normalizedName = product.name.toLowerCase();
-      const isPizzaProduct = normalizedName.includes('pizza');
       const maxUserSortOrder = groups.reduce((max, g) => Math.max(max, g.sort_order ?? 0), 0);
 
-      if (isPizzaProduct && sizesData && Array.isArray(sizesData) && sizesData.length > 0) {
+      if (hasPizzaSizes) {
         const sizeGroup: OptionGroup = {
           id: 'pizza-size',
           name: 'Tamanho',
-          description: null,
+          description: 'Selecione o tamanho da pizza',
           is_required: true,
           min_selections: 1,
           max_selections: 1,
@@ -362,6 +372,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
           options: (sizesData as any[]).map((size) => ({
             id: size.id,
             name: size.name,
+            description: size.slices ? `${size.slices} pedaços` : (size.max_flavors ? `Até ${size.max_flavors} sabores` : null),
             price_modifier: Number(size.base_price ?? 0),
             is_required: true,
             is_available: true,
@@ -478,7 +489,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
         });
       }
 
-      if (isPizzaProduct && doughTypes && Array.isArray(doughTypes) && doughTypes.length > 0) {
+      if (isPizzaCategory && doughTypes && Array.isArray(doughTypes) && doughTypes.length > 0) {
         const doughGroup: OptionGroup = {
           id: 'pizza-dough',
           name: 'Tipo de massa',
@@ -507,7 +518,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
       const hasGlobalCrustFlavors =
         !hasProductCrustLinks && globalCrustFlavors && Array.isArray(globalCrustFlavors) && globalCrustFlavors.length > 0;
 
-      if (isPizzaProduct && (hasProductCrustLinks || hasGlobalCrustFlavors)) {
+      if (isPizzaCategory && (hasProductCrustLinks || hasGlobalCrustFlavors)) {
         const flavorsSource = hasProductCrustLinks
           ? (crustLinks as any[]).map((link) => link.pizza_crust_flavors)
           : (globalCrustFlavors as any[]);
