@@ -14,7 +14,24 @@ import {
   ToggleLeft,
   ToggleRight,
   Pencil,
+  BarChart3,
 } from 'lucide-react';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ImageUpload } from '@/components/ui/image-upload';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useActivityLog } from '@/hooks/useActivityLog';
+import { supabase } from '@/integrations/supabase/client';
+import { PromotionAnalyticsDashboard } from '@/components/promotions/PromotionAnalyticsDashboard';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -392,6 +409,25 @@ export default function PromotionsManagement() {
             Nova Promoção
           </Button>
         </div>
+
+        {/* Tabs for Promotions and Analytics */}
+        <Tabs defaultValue="promotions" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="promotions" className="flex items-center gap-2">
+              <Tag className="h-4 w-4" />
+              Promoções
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="analytics" className="mt-6">
+            <PromotionAnalyticsDashboard companyId={companyId} />
+          </TabsContent>
+
+          <TabsContent value="promotions" className="mt-6">
 
         {/* Dialog for Create/Edit */}
         <Dialog open={dialogOpen} onOpenChange={(open) => {

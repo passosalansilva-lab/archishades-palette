@@ -1766,9 +1766,10 @@ function PublicMenuContent() {
       )}
 
       {/* Promotions Banner - Carousel */}
-      {promotions.length > 0 && !searchQuery && !selectedCategory && (
+      {promotions.length > 0 && !searchQuery && !selectedCategory && company && (
         <PromotionsBanner 
-          promotions={promotions} 
+          promotions={promotions}
+          companyId={company.id}
           onPromotionClick={(promo) => {
             // If promotion is linked to a product, open it
             if (promo.product_id) {
@@ -1787,10 +1788,11 @@ function PublicMenuContent() {
       )}
 
       {/* Promotional Products Section */}
-      {promotions.length > 0 && !searchQuery && !selectedCategory && (
+      {promotions.length > 0 && !searchQuery && !selectedCategory && company && (
         <PromotionalProductsSection
           promotions={promotions}
           products={products}
+          companyId={company.id}
           onProductClick={handleProductClick}
         />
       )}

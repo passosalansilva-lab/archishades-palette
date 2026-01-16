@@ -281,3 +281,6 @@ verify_jwt = false
 
 [functions.slice-pizza-image]
 verify_jwt = false
+
+[functions.track-promotion-event]
+verify_jwt = false

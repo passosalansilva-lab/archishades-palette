@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import { cn } from '@/lib/utils';
+import { usePromotionTracking, useTrackPromotionViews } from '@/hooks/usePromotionTracking';
 
 interface Promotion {
   id: string;
@@ -20,15 +21,19 @@ interface Promotion {
 
 interface PromotionsBannerProps {
   promotions: Promotion[];
+  companyId?: string;
   onPromotionClick?: (promotion: Promotion) => void;
 }
 
-export function PromotionsBanner({ promotions, onPromotionClick }: PromotionsBannerProps) {
+export function PromotionsBanner({ promotions, companyId, onPromotionClick }: PromotionsBannerProps) {
+  const { trackClick } = usePromotionTracking();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
 
   const activePromotions = promotions.filter(p => p.is_active);
 
+  // Track views for all active promotions
+  useTrackPromotionViews(activePromotions, companyId, activePromotions.length > 0);
   const nextSlide = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % activePromotions.length);
   }, [activePromotions.length]);
@@ -86,7 +91,12 @@ export function PromotionsBanner({ promotions, onPromotionClick }: PromotionsBan
         </div>
 
         <button
-          onClick={() => onPromotionClick?.(currentPromotion)}
+          onClick={() => {
+            if (companyId) {
+              trackClick(currentPromotion.id, companyId);
+            }
+            onPromotionClick?.(currentPromotion);
+          }}
           className="relative w-full text-left p-5 min-h-[140px] flex items-center gap-4 transition-transform active:scale-[0.99]"
         >
           {/* Image */}

@@ -2,6 +2,7 @@ import { Tag, Sparkles, Percent, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import { cn } from '@/lib/utils';
+import { usePromotionTracking } from '@/hooks/usePromotionTracking';
 
 interface Promotion {
   id: string;
@@ -31,14 +32,17 @@ interface Product {
 interface PromotionalProductsSectionProps {
   promotions: Promotion[];
   products: Product[];
+  companyId?: string;
   onProductClick: (product: Product) => void;
 }
 
 export function PromotionalProductsSection({ 
   promotions, 
-  products, 
+  products,
+  companyId,
   onProductClick 
 }: PromotionalProductsSectionProps) {
+  const { trackClick } = usePromotionTracking();
   const activePromotions = promotions.filter(p => p.is_active);
   
   // Get products that are in promotion (either by product_id or category_id)
@@ -121,7 +125,13 @@ export function PromotionalProductsSection({
           return (
             <button
               key={product.id}
-              onClick={() => onProductClick(product)}
+              onClick={() => {
+                // Track click on the promotion if exists
+                if (promotion && companyId) {
+                  trackClick(promotion.id, companyId);
+                }
+                onProductClick(product);
+              }}
               className="relative group text-left rounded-2xl bg-card border border-border/60 overflow-hidden shadow-sm hover:shadow-lg hover:border-primary/30 transition-all active:scale-[0.98]"
             >
               {/* Discount Badge */}
