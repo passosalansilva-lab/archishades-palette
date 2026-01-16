@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, LayoutDashboard, Globe, UtensilsCrossed, Clock, Save, Play, CreditCard, Palette, RotateCcw } from "lucide-react";
+import { Loader2, Upload, Trash2, LayoutDashboard, Globe, UtensilsCrossed, Clock, Save, Play, CreditCard, Palette, RotateCcw, Brain, Key } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +86,12 @@ export default function SystemSettings() {
     accent: "#fef3c7",
   });
   const [savingColors, setSavingColors] = useState(false);
+  
+  // AI Settings
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiProvider, setAiProvider] = useState<string>("lovable");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [savingAi, setSavingAi] = useState(false);
 
   useEffect(() => {
     checkAccess();
@@ -123,6 +130,9 @@ export default function SystemSettings() {
       "system_color_primary",
       "system_color_secondary",
       "system_color_accent",
+      "ai_enabled",
+      "ai_provider",
+      "ai_api_key",
     ];
     
     const { data, error } = await supabase
@@ -151,6 +161,12 @@ export default function SystemSettings() {
           setSystemColors(prev => ({ ...prev, secondary: item.value! }));
         } else if (item.key === "system_color_accent" && item.value) {
           setSystemColors(prev => ({ ...prev, accent: item.value! }));
+        } else if (item.key === "ai_enabled") {
+          setAiEnabled(item.value === "true");
+        } else if (item.key === "ai_provider" && item.value) {
+          setAiProvider(item.value);
+        } else if (item.key === "ai_api_key" && item.value) {
+          setAiApiKey(item.value);
         } else if (item.key.startsWith("integration_")) {
           integrationMap[item.key] = item.value === "true";
         } else {
@@ -313,6 +329,31 @@ export default function SystemSettings() {
       toast.error("Erro ao atualizar integração");
     } finally {
       setSavingIntegration(null);
+    }
+  };
+
+  const handleSaveAiSettings = async () => {
+    setSavingAi(true);
+    try {
+      const settings = [
+        { key: "ai_enabled", value: aiEnabled.toString() },
+        { key: "ai_provider", value: aiProvider },
+        { key: "ai_api_key", value: aiApiKey },
+      ];
+
+      for (const setting of settings) {
+        const { error } = await supabase
+          .from("system_settings")
+          .upsert(setting, { onConflict: "key" });
+        if (error) throw error;
+      }
+
+      toast.success("Configurações de IA salvas com sucesso!");
+    } catch (error) {
+      console.error("Error saving AI settings:", error);
+      toast.error("Erro ao salvar configurações de IA");
+    } finally {
+      setSavingAi(false);
     }
   };
 
@@ -593,6 +634,99 @@ export default function SystemSettings() {
                 Verifica e suspende empresas inativas imediatamente
               </span>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* AI Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500">
+                <Brain className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Inteligência Artificial</CardTitle>
+                <CardDescription>
+                  Configure o uso de IA no sistema (corte de pizza, sugestões, etc)
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-lg border">
+              <div>
+                <p className="font-medium">Habilitar recursos de IA</p>
+                <p className="text-sm text-muted-foreground">
+                  Ativa funcionalidades que usam inteligência artificial
+                </p>
+              </div>
+              <Switch
+                checked={aiEnabled}
+                onCheckedChange={setAiEnabled}
+              />
+            </div>
+
+            {aiEnabled && (
+              <>
+                <div className="space-y-2">
+                  <Label>Provedor de IA</Label>
+                  <Select value={aiProvider} onValueChange={setAiProvider}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o provedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lovable">Lovable AI (padrão)</SelectItem>
+                      <SelectItem value="openai">OpenAI (requer API Key)</SelectItem>
+                      <SelectItem value="google">Google Gemini (requer API Key)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Lovable AI usa créditos do seu workspace. OpenAI/Google usam sua própria chave.
+                  </p>
+                </div>
+
+                {aiProvider !== "lovable" && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Key className="h-4 w-4" />
+                      API Key
+                    </Label>
+                    <Input
+                      type="password"
+                      value={aiApiKey}
+                      onChange={(e) => setAiApiKey(e.target.value)}
+                      placeholder={aiProvider === "openai" ? "sk-..." : "AIza..."}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {aiProvider === "openai" 
+                        ? "Obtenha em platform.openai.com" 
+                        : "Obtenha em console.cloud.google.com"}
+                    </p>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleSaveAiSettings}
+                  disabled={savingAi}
+                  size="sm"
+                >
+                  {savingAi ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Salvar Configurações de IA
+                </Button>
+              </>
+            )}
+
+            {!aiEnabled && (
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  Quando desabilitado, funcionalidades como corte automático de pizza não estarão disponíveis.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

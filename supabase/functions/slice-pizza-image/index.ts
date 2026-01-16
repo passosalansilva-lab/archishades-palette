@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,22 +21,89 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    // Check AI settings from system_settings
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: aiSettings } = await supabase
+      .from("system_settings")
+      .select("key, value")
+      .in("key", ["ai_enabled", "ai_provider", "ai_api_key"]);
+
+    const settings: Record<string, string> = {};
+    aiSettings?.forEach((s: any) => {
+      settings[s.key] = s.value;
+    });
+
+    const aiEnabled = settings["ai_enabled"] === "true";
+    const aiProvider = settings["ai_provider"] || "lovable";
+    const customApiKey = settings["ai_api_key"] || "";
+
+    if (!aiEnabled) {
+      return new Response(
+        JSON.stringify({ error: "Recursos de IA estão desabilitados. Ative nas configurações do sistema." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Determine which API key and endpoint to use
+    let apiKey: string;
+    let apiEndpoint: string;
+    let model: string;
+    let imageModel: string;
+
+    if (aiProvider === "lovable") {
+      apiKey = Deno.env.get("LOVABLE_API_KEY") || "";
+      apiEndpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
+      model = "google/gemini-2.5-flash";
+      imageModel = "google/gemini-2.5-flash-image-preview";
+    } else if (aiProvider === "openai") {
+      apiKey = customApiKey;
+      apiEndpoint = "https://api.openai.com/v1/chat/completions";
+      model = "gpt-4o";
+      imageModel = "gpt-4o"; // OpenAI uses same model for image generation
+    } else if (aiProvider === "google") {
+      apiKey = customApiKey;
+      apiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+      model = "gemini-2.0-flash";
+      imageModel = "gemini-2.0-flash";
+    } else {
+      return new Response(
+        JSON.stringify({ error: "Provedor de IA não suportado" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "API Key de IA não configurada" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const sliceCount = numberOfSlices || 8;
     
+    // For now, only Lovable AI is fully implemented for image generation
+    // Other providers would need different implementation
+    if (aiProvider !== "lovable") {
+      return new Response(
+        JSON.stringify({ 
+          error: "Apenas Lovable AI suporta geração de imagens no momento. Altere o provedor nas configurações." 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     // First, analyze the image to detect pizza and count slices
-    const analysisResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const analysisResponse = await fetch(apiEndpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: model,
         messages: [
           {
             role: "user",
@@ -81,14 +149,14 @@ serve(async (req) => {
     for (let i = 0; i < detectedSlices; i++) {
       const sliceNumber = i + 1;
       
-      const sliceResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const sliceResponse = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image-preview",
+          model: imageModel,
           messages: [
             {
               role: "user",
