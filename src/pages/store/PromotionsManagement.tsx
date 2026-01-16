@@ -32,20 +32,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useActivityLog } from '@/hooks/useActivityLog';
 import { supabase } from '@/integrations/supabase/client';
 import { PromotionAnalyticsDashboard } from '@/components/promotions/PromotionAnalyticsDashboard';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { CurrencyInput } from '@/components/ui/currency-input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ImageUpload } from '@/components/ui/image-upload';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
-import { useActivityLog } from '@/hooks/useActivityLog';
-import { supabase } from '@/integrations/supabase/client';
 
 const promotionSchema = z.object({
   name: z.string().min(2, 'Nome é obrigatório').max(100),
@@ -427,7 +413,131 @@ export default function PromotionsManagement() {
             <PromotionAnalyticsDashboard companyId={companyId} />
           </TabsContent>
 
-          <TabsContent value="promotions" className="mt-6">
+          <TabsContent value="promotions" className="mt-6 space-y-4">
+            {/* Promotions List */}
+            {promotions.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Tag className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">Nenhuma promoção</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Crie sua primeira promoção para atrair mais clientes
+                  </p>
+                  <Button onClick={openCreateDialog} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Criar Promoção
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {promotions.map((promotion) => (
+                  <Card key={promotion.id} className={!promotion.is_active ? 'opacity-60' : ''}>
+                    <CardContent className="p-4">
+                      <div className="flex gap-4">
+                        {/* Image */}
+                        {promotion.image_url ? (
+                          <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-secondary">
+                            <img
+                              src={promotion.image_url}
+                              alt={promotion.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex-shrink-0 w-24 h-24 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Tag className="h-8 w-8 text-primary" />
+                          </div>
+                        )}
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-medium truncate">{promotion.name}</h3>
+                              {promotion.description && (
+                                <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
+                                  {promotion.description}
+                                </p>
+                              )}
+                            </div>
+                            <Badge
+                              variant={promotion.discount_type === 'percentage' ? 'default' : 'secondary'}
+                              className="flex-shrink-0"
+                            >
+                              {formatDiscount(promotion.discount_type, promotion.discount_value)} OFF
+                            </Badge>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
+                            {promotion.products && (
+                              <span className="flex items-center gap-1">
+                                <Package className="h-3 w-3" />
+                                {promotion.products.name}
+                              </span>
+                            )}
+                            {promotion.categories && (
+                              <span className="flex items-center gap-1">
+                                <Tag className="h-3 w-3" />
+                                {promotion.categories.name}
+                              </span>
+                            )}
+                            {promotion.expires_at && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                Expira: {new Date(promotion.expires_at).toLocaleDateString('pt-BR')}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(promotion)}
+                              className="h-8 px-2"
+                            >
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => togglePromotion(promotion.id, promotion.is_active, promotion.name)}
+                              className="h-8 px-2"
+                            >
+                              {promotion.is_active ? (
+                                <>
+                                  <ToggleRight className="h-4 w-4 mr-1 text-primary" />
+                                  Ativa
+                                </>
+                              ) : (
+                                <>
+                                  <ToggleLeft className="h-4 w-4 mr-1" />
+                                  Inativa
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deletePromotion(promotion.id, promotion.name)}
+                              className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
 
         {/* Dialog for Create/Edit */}
         <Dialog open={dialogOpen} onOpenChange={(open) => {
@@ -477,37 +587,37 @@ export default function PromotionsManagement() {
                     <option value="fixed">Valor Fixo (R$)</option>
                   </select>
                 </div>
-              <div className="space-y-2">
-                <Label htmlFor="discount_value">
-                  Valor do Desconto *
-                </Label>
-                <div className="relative">
-                  {discountType === 'percentage' ? (
-                    <>
-                      <Percent className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
+                <div className="space-y-2">
+                  <Label htmlFor="discount_value">
+                    Valor do Desconto *
+                  </Label>
+                  <div className="relative">
+                    {discountType === 'percentage' ? (
+                      <>
+                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="discount_value"
+                          type="number"
+                          step="1"
+                          min="1"
+                          placeholder="10"
+                          className="pl-9"
+                          {...register('discount_value')}
+                        />
+                      </>
+                    ) : (
+                      <CurrencyInput
                         id="discount_value"
-                        type="number"
-                        step="1"
-                        min="1"
-                        placeholder="10"
-                        className="pl-9"
-                        {...register('discount_value')}
+                        value={watch('discount_value') || ''}
+                        onChange={(value) => setValue('discount_value', parseFloat(value) || 0)}
+                        placeholder="0,00"
                       />
-                    </>
-                  ) : (
-                    <CurrencyInput
-                      id="discount_value"
-                      value={watch('discount_value') || ''}
-                      onChange={(value) => setValue('discount_value', parseFloat(value) || 0)}
-                      placeholder="0,00"
-                    />
+                    )}
+                  </div>
+                  {errors.discount_value && (
+                    <p className="text-sm text-destructive">{errors.discount_value.message}</p>
                   )}
                 </div>
-                {errors.discount_value && (
-                  <p className="text-sm text-destructive">{errors.discount_value.message}</p>
-                )}
-              </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -573,129 +683,6 @@ export default function PromotionsManagement() {
             </form>
           </DialogContent>
         </Dialog>
-
-        {/* Promotions List */}
-        {promotions.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <Tag className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="text-lg font-medium mb-2">Nenhuma promoção</h3>
-              <p className="text-muted-foreground mb-4">
-                Crie sua primeira promoção para atrair mais clientes
-              </p>
-              <Button onClick={openCreateDialog} variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Promoção
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
-            {promotions.map((promotion) => (
-              <Card key={promotion.id} className={!promotion.is_active ? 'opacity-60' : ''}>
-                <CardContent className="p-4">
-                  <div className="flex gap-4">
-                    {/* Image */}
-                    {promotion.image_url ? (
-                      <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-secondary">
-                        <img
-                          src={promotion.image_url}
-                          alt={promotion.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex-shrink-0 w-24 h-24 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Tag className="h-8 w-8 text-primary" />
-                      </div>
-                    )}
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-medium truncate">{promotion.name}</h3>
-                          {promotion.description && (
-                            <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
-                              {promotion.description}
-                            </p>
-                          )}
-                        </div>
-                        <Badge
-                          variant={promotion.discount_type === 'percentage' ? 'default' : 'secondary'}
-                          className="flex-shrink-0"
-                        >
-                          {formatDiscount(promotion.discount_type, promotion.discount_value)} OFF
-                        </Badge>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
-                        {promotion.products && (
-                          <span className="flex items-center gap-1">
-                            <Package className="h-3 w-3" />
-                            {promotion.products.name}
-                          </span>
-                        )}
-                        {promotion.categories && (
-                          <span className="flex items-center gap-1">
-                            <Tag className="h-3 w-3" />
-                            {promotion.categories.name}
-                          </span>
-                        )}
-                        {promotion.expires_at && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            Expira: {new Date(promotion.expires_at).toLocaleDateString('pt-BR')}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(promotion)}
-                          className="h-8 px-2"
-                        >
-                          <Pencil className="h-4 w-4 mr-1" />
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => togglePromotion(promotion.id, promotion.is_active, promotion.name)}
-                          className="h-8 px-2"
-                        >
-                          {promotion.is_active ? (
-                            <>
-                              <ToggleRight className="h-4 w-4 mr-1 text-primary" />
-                              Ativa
-                            </>
-                          ) : (
-                            <>
-                              <ToggleLeft className="h-4 w-4 mr-1" />
-                              Inativa
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deletePromotion(promotion.id, promotion.name)}
-                          className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
       </div>
     </DashboardLayout>
   );
