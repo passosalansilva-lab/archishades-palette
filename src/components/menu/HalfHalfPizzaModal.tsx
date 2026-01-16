@@ -355,10 +355,11 @@ export function HalfHalfPizzaModal({
         normalize(g.name).includes("dough")
       );
 
-      const doughGroups = [
-        ...doughGroupsFromPizza,
-        ...doughGroupsFromNames,
-      ];
+      // Priorizar pizza_dough_types; se existir, ignorar grupos de product_options
+      // para evitar duplicação de opções como "Tradicional"
+      const doughGroups = doughGroupsFromPizza.length > 0 
+        ? doughGroupsFromPizza 
+        : doughGroupsFromNames;
 
       const crustFromNames = mergedGroups.filter((g) => {
         const name = normalize(g.name);
