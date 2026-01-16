@@ -1,8 +1,10 @@
-import { Tag, Sparkles, Percent, ArrowRight } from 'lucide-react';
+import { Tag, Sparkles, Percent, ArrowRight, ShoppingBag } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { OptimizedImage } from '@/components/ui/optimized-image';
 import { cn } from '@/lib/utils';
 import { usePromotionTracking } from '@/hooks/usePromotionTracking';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Promotion {
   id: string;
@@ -39,6 +41,9 @@ interface PromotionalProductsSectionProps {
   onProductClick: (product: Product, promotionId?: string) => void;
 }
 
+// Cache para produtos com tamanhos
+const productsWithSizesCache = new Map<string, boolean>();
+
 export function PromotionalProductsSection({ 
   promotions, 
   products,
@@ -47,6 +52,7 @@ export function PromotionalProductsSection({
 }: PromotionalProductsSectionProps) {
   const { trackClick } = usePromotionTracking();
   const activePromotions = promotions.filter(p => p.is_active);
+  const [productsWithSizes, setProductsWithSizes] = useState<Set<string>>(new Set());
   
   // Get products that are in promotion (either by product_id or category_id)
   const promotionalProducts = products.filter(product => {
@@ -65,6 +71,44 @@ export function PromotionalProductsSection({
   const allPromotionalProducts = [...new Map(
     [...promotionalProducts, ...productsWithPromoPrice].map(p => [p.id, p])
   ).values()];
+
+  // Check which products have size options
+  useEffect(() => {
+    const checkProductSizes = async () => {
+      if (allPromotionalProducts.length === 0) return;
+      
+      const productIds = allPromotionalProducts.map(p => p.id);
+      const uncachedIds = productIds.filter(id => !productsWithSizesCache.has(id));
+      
+      if (uncachedIds.length > 0) {
+        // Query product_option_groups for "tamanho" type options
+        const { data } = await supabase
+          .from('product_option_groups')
+          .select('product_id')
+          .in('product_id', uncachedIds)
+          .ilike('name', '%tamanho%');
+        
+        const productsWithSizeOptions = new Set(data?.map(d => d.product_id) || []);
+        
+        // Update cache
+        uncachedIds.forEach(id => {
+          productsWithSizesCache.set(id, productsWithSizeOptions.has(id));
+        });
+      }
+      
+      // Build set from cache
+      const result = new Set<string>();
+      productIds.forEach(id => {
+        if (productsWithSizesCache.get(id)) {
+          result.add(id);
+        }
+      });
+      
+      setProductsWithSizes(result);
+    };
+    
+    checkProductSizes();
+  }, [allPromotionalProducts.length]);
 
   if (allPromotionalProducts.length === 0) return null;
 
@@ -171,14 +215,25 @@ export function PromotionalProductsSection({
                 <h3 className="font-semibold text-sm leading-tight line-clamp-2 group-hover:text-primary transition-colors">
                   {product.name}
                 </h3>
-                <div className="mt-2 flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-muted-foreground line-through">
-                    R$ {Number(product.price).toFixed(2)}
-                  </span>
-                  <span className="text-base font-bold text-primary">
-                    R$ {discountedPrice.toFixed(2)}
-                  </span>
-                </div>
+                {productsWithSizes.has(product.id) ? (
+                  // Product has sizes - show CTA instead of price
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-sm font-semibold text-primary">
+                      Confira
+                    </span>
+                  </div>
+                ) : (
+                  // Product has single price - show from/to pricing
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground line-through">
+                      R$ {Number(product.price).toFixed(2)}
+                    </span>
+                    <span className="text-base font-bold text-primary">
+                      R$ {discountedPrice.toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
             </button>
           );
