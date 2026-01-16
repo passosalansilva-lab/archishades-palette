@@ -619,6 +619,20 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
   });
 
   const handleSingleSelect = (group: OptionGroup, option: ProductOption) => {
+    const isCurrentlySelected = selectedOptions.some((o) => o.optionId === option.id);
+    
+    // If group is NOT required and option is already selected, allow deselection
+    if (!group.is_required && isCurrentlySelected) {
+      let filtered = selectedOptions.filter((o) => o.optionId !== option.id);
+      
+      if (group.id === 'acai-size') {
+        filtered = filtered.filter((o) => !o.groupId.startsWith('acai-group-'));
+      }
+      
+      setSelectedOptions(filtered);
+      return;
+    }
+    
     let filtered = selectedOptions.filter((o) => o.groupId !== group.id);
     
     if (group.id === 'acai-size') {
@@ -921,7 +935,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
                                 }
                               }}
                               disabled={maxReached}
-                              selectionType={group.selection_type === 'single' ? 'single' : 'multiple'}
+                              selectionType={group.selection_type === 'single' && group.is_required ? 'single' : 'multiple'}
                               priceDisplay={priceDisplay}
                               showHalfPrice={isHalfHalf}
                             />
