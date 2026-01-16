@@ -12,6 +12,7 @@ import { Loader2, Save, Plus, GripVertical, Trash2 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
 interface OnboardingStep {
   id: string;
@@ -259,6 +260,7 @@ export default function OnboardingConfig() {
   }
 
   return (
+    <DashboardLayout>
     <div className="container max-w-4xl py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -307,5 +309,6 @@ export default function OnboardingConfig() {
         </Card>
       )}
     </div>
+    </DashboardLayout>
   );
 }
