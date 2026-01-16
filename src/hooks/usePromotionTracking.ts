@@ -37,14 +37,15 @@ export function usePromotionTracking() {
       if (eventType === 'view') {
         const viewKey = `${promotionId}-${sessionId}`;
         if (trackedViews.current.has(viewKey)) {
+          console.log(`[PromotionTracking] View already tracked for promotion ${promotionId}, skipping`);
           return; // Already tracked this view
         }
         trackedViews.current.add(viewKey);
       }
 
-      console.log(`[PromotionTracking] Tracking ${eventType} for promotion ${promotionId}`);
+      console.log(`[PromotionTracking] Tracking ${eventType} for promotion ${promotionId}, company ${companyId}`);
 
-      const { error } = await supabase.functions.invoke('track-promotion-event', {
+      const { data, error } = await supabase.functions.invoke('track-promotion-event', {
         body: {
           promotion_id: promotionId,
           company_id: companyId,
@@ -57,6 +58,8 @@ export function usePromotionTracking() {
 
       if (error) {
         console.error('[PromotionTracking] Error tracking event:', error);
+      } else {
+        console.log(`[PromotionTracking] Event tracked successfully:`, data);
       }
     } catch (err) {
       console.error('[PromotionTracking] Failed to track event:', err);
