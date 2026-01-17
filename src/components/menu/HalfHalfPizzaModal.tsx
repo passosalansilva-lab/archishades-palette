@@ -109,20 +109,9 @@ export function HalfHalfPizzaModal({
       .trim();
 
   const getFlavorPriceForSelectedSize = (product: Product): number => {
-    if (!selectedSize) {
-      console.log('[HalfHalf] Sem tamanho selecionado, usando product.price:', product.price);
-      return Number(product.price);
-    }
+    if (!selectedSize) return Number(product.price);
     const key = normalizeSizeKey(selectedSize.name);
     const price = sizePriceByProduct[product.id]?.[key];
-    console.log('[HalfHalf] getFlavorPriceForSelectedSize:', {
-      product: product.name,
-      selectedSizeName: selectedSize.name,
-      key,
-      priceFromMap: price,
-      productPrice: product.price,
-      sizePriceByProduct: sizePriceByProduct[product.id],
-    });
     if (typeof price === 'number' && price > 0) return price;
     return Number(product.price);
   };
@@ -631,7 +620,8 @@ export function HalfHalfPizzaModal({
     }
 
     // Fallback antigo: se não temos mapa de preços por tamanho, usar base_price do tamanho (categoria)
-    if (selectedSize && Object.keys(sizePriceByProduct).length === 0) {
+    // IMPORTANTE: não sobrescrever um basePrice já calculado a partir dos sabores.
+    if (basePrice === 0 && selectedSize && Object.keys(sizePriceByProduct).length === 0) {
       if (selectedSize.base_price > 0) {
         basePrice = selectedSize.base_price;
       }
