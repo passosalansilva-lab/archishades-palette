@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CommentInput } from "@/components/portal/CommentInput";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -86,8 +87,6 @@ export default function Portal() {
   const [categories, setCategories] = useState<PortalCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
-  const [newComment, setNewComment] = useState<Record<string, string>>({});
-  const [submittingComment, setSubmittingComment] = useState<string | null>(null);
   const [loadingComments, setLoadingComments] = useState<Set<string>>(new Set());
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -284,13 +283,9 @@ export default function Portal() {
     }
   };
 
-  const submitComment = async (postId: string) => {
+  const handleSubmitComment = useCallback(async (postId: string, content: string) => {
     if (!user?.id) return;
 
-    const content = newComment[postId]?.trim();
-    if (!content) return;
-
-    setSubmittingComment(postId);
     try {
       const { error } = await (supabase as any)
         .from("portal_post_comments")
@@ -301,8 +296,6 @@ export default function Portal() {
         });
 
       if (error) throw error;
-
-      setNewComment((prev) => ({ ...prev, [postId]: "" }));
 
       // Update comment count
       setPosts((prev) =>
@@ -317,10 +310,9 @@ export default function Portal() {
     } catch (error: any) {
       console.error("Error submitting comment:", error);
       toast.error("Erro ao enviar comentário");
-    } finally {
-      setSubmittingComment(null);
+      throw error; // Re-throw so CommentInput knows it failed
     }
-  };
+  }, [user?.id]);
 
   const deleteComment = async (postId: string, commentId: string) => {
     try {
@@ -534,32 +526,10 @@ export default function Portal() {
                   className="space-y-4 overflow-hidden"
                 >
                   {/* New Comment Input */}
-                  <div className="flex gap-2">
-                    <Textarea
-                      placeholder="Escreva um comentário..."
-                      value={newComment[post.id] || ""}
-                      onChange={(e) =>
-                        setNewComment((prev) => ({
-                          ...prev,
-                          [post.id]: e.target.value,
-                        }))
-                      }
-                      rows={2}
-                      className="flex-1 resize-none"
-                    />
-                    <Button
-                      onClick={() => submitComment(post.id)}
-                      disabled={!newComment[post.id]?.trim() || submittingComment === post.id}
-                      size="icon"
-                      className="shrink-0"
-                    >
-                      {submittingComment === post.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
+                  <CommentInput
+                    postId={post.id}
+                    onSubmit={handleSubmitComment}
+                  />
 
                   {/* Comments List */}
                   {loadingComments.has(post.id) ? (
