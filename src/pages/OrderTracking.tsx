@@ -107,6 +107,7 @@ interface Order {
    preparing: { label: 'Em preparação', shortLabel: 'Preparando', icon: ChefHat, badgeClass: 'bg-secondary/20 text-secondary-foreground border-secondary/40' },
    ready: { label: 'Pronto para entrega', shortLabel: 'Pronto', icon: Package, badgeClass: 'bg-primary/10 text-primary border-primary/40' },
    awaiting_driver: { label: 'Aguardando entregador', shortLabel: 'Aguard. Entreg.', icon: Truck, badgeClass: 'bg-muted text-muted-foreground border-border' },
+   queued: { label: 'Aguardando entregador', shortLabel: 'Aguard. Entreg.', icon: Truck, badgeClass: 'bg-muted text-muted-foreground border-border' },
    out_for_delivery: { label: 'A caminho', shortLabel: 'A caminho', icon: Truck, badgeClass: 'bg-primary/10 text-primary border-primary/40' },
    delivered: { label: 'Entregue', shortLabel: 'Entregue', icon: CircleCheck, badgeClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/40' },
    cancelled: { label: 'Cancelado', shortLabel: 'Cancelado', icon: XCircle, badgeClass: 'bg-destructive/10 text-destructive border-destructive/40' },
@@ -420,8 +421,8 @@ export default function OrderTracking() {
                  <div className="relative flex items-center justify-between">
                    {activeStatusSteps.map((step, index) => {
                       const stepConfig = activeStatusConfig[step];
-                      // Map awaiting_driver to ready for visual display (customer shouldn't see awaiting_driver)
-                      const displayStatus = order.status === 'awaiting_driver' ? 'ready' : order.status;
+                      // Map awaiting_driver and queued to ready for visual display (customer shouldn't see these internal statuses)
+                      const displayStatus = ['awaiting_driver', 'queued'].includes(order.status) ? 'ready' : order.status;
                       const orderStepIndex = activeStatusSteps.indexOf(displayStatus as any);
                       const isCompleted = orderStepIndex >= index;
                       const isCurrent = displayStatus === step;
@@ -450,7 +451,7 @@ export default function OrderTracking() {
                      <div
                        className="h-full bg-primary transition-all duration-500"
                        style={{
-                         width: `${Math.min((activeStatusSteps.indexOf(order.status === 'awaiting_driver' ? 'ready' : order.status as any) / (activeStatusSteps.length - 1)) * 100, 100)}%`,
+                         width: `${Math.min((activeStatusSteps.indexOf(['awaiting_driver', 'queued'].includes(order.status) ? 'ready' : order.status as any) / (activeStatusSteps.length - 1)) * 100, 100)}%`,
                        }}
                      />
                    </div>
