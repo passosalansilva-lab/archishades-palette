@@ -1,3 +1,48 @@
+-- Tabela de categorias do portal
+CREATE TABLE IF NOT EXISTS public.portal_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT,
+  icon TEXT, -- nome do ícone lucide
+  color TEXT DEFAULT '#6366f1', -- cor em hex
+  sort_order INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Inserir categorias padrão
+INSERT INTO public.portal_categories (name, slug, description, icon, color, sort_order) VALUES
+  ('Novidades', 'novidades', 'Novas funcionalidades e recursos', 'Sparkles', '#22c55e', 1),
+  ('Dicas', 'dicas', 'Dicas para melhorar seu negócio', 'Lightbulb', '#f59e0b', 2),
+  ('Tutoriais', 'tutoriais', 'Passo a passo de como usar', 'GraduationCap', '#3b82f6', 3),
+  ('Atualizações', 'atualizacoes', 'Correções e melhorias do sistema', 'RefreshCw', '#8b5cf6', 4),
+  ('Promoções', 'promocoes', 'Ofertas especiais para lojistas', 'Percent', '#ef4444', 5)
+ON CONFLICT (slug) DO NOTHING;
+
+-- Adicionar coluna category_id na tabela de posts
+ALTER TABLE public.portal_posts
+ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES public.portal_categories(id) ON DELETE SET NULL;
+
+-- Índice para busca por categoria
+CREATE INDEX IF NOT EXISTS idx_portal_posts_category ON public.portal_posts(category_id);
+
+-- Enable RLS na tabela de categorias
+ALTER TABLE public.portal_categories ENABLE ROW LEVEL SECURITY;
+
+-- RLS: todos autenticados podem ver categorias ativas
+CREATE POLICY "Anyone can view active categories"
+ON public.portal_categories FOR SELECT
+TO authenticated
+USING (is_active = true);
+
+-- RLS: apenas admins podem gerenciar categorias
+CREATE POLICY "Admins can manage categories"
+ON public.portal_categories FOR ALL
+TO authenticated
+USING (public.has_role(auth.uid(), 'super_admin'))
+WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
+
 -- Tabela de posts do portal (gerenciado pelo admin)
 CREATE TABLE IF NOT EXISTS public.portal_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -8,6 +53,7 @@ CREATE TABLE IF NOT EXISTS public.portal_posts (
   image_url TEXT,
   is_published BOOLEAN DEFAULT true,
   pinned BOOLEAN DEFAULT false, -- para destacar no topo
+  category_id UUID REFERENCES public.portal_categories(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL
@@ -139,3 +185,41 @@ USING (
   bucket_id = 'portal-videos' 
   AND public.has_role(auth.uid(), 'super_admin')
 );
+
+-- Função para notificar lojistas quando um post é publicado
+CREATE OR REPLACE FUNCTION public.notify_portal_post()
+RETURNS TRIGGER AS $$
+DECLARE
+  owner_record RECORD;
+BEGIN
+  -- Só notifica se o post está sendo publicado (is_published = true)
+  -- E é uma inserção ou o status mudou de não publicado para publicado
+  IF NEW.is_published = true AND (TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.is_published = false)) THEN
+    -- Buscar todos os donos de empresa
+    FOR owner_record IN 
+      SELECT DISTINCT owner_id 
+      FROM public.companies 
+      WHERE status = 'approved' AND owner_id IS NOT NULL
+    LOOP
+      -- Inserir notificação para cada lojista
+      INSERT INTO public.notifications (user_id, title, message, type, link)
+      VALUES (
+        owner_record.owner_id,
+        '📢 Nova publicação no Portal',
+        NEW.title,
+        'info',
+        '/dashboard/portal'
+      );
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger para notificar quando post é publicado
+DROP TRIGGER IF EXISTS trigger_notify_portal_post ON public.portal_posts;
+CREATE TRIGGER trigger_notify_portal_post
+  AFTER INSERT OR UPDATE ON public.portal_posts
+  FOR EACH ROW
+  EXECUTE FUNCTION public.notify_portal_post();
