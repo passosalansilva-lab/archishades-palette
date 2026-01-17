@@ -176,18 +176,23 @@ VALUES ('portal-videos', 'portal-videos', true, 524288000) -- 500MB limit
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage policies para portal-videos
--- Drop existing storage policies first
+-- Drop existing storage policies first (using unique names)
+DROP POLICY IF EXISTS "portal_videos_select_policy" ON storage.objects;
+DROP POLICY IF EXISTS "portal_videos_insert_policy" ON storage.objects;
+DROP POLICY IF EXISTS "portal_videos_update_policy" ON storage.objects;
+DROP POLICY IF EXISTS "portal_videos_delete_policy" ON storage.objects;
+-- Also drop old policy names if they exist
 DROP POLICY IF EXISTS "Anyone can view portal videos" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can upload portal videos" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can update portal videos" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can delete portal videos" ON storage.objects;
 
-CREATE POLICY "Anyone can view portal videos"
+CREATE POLICY "portal_videos_select_policy"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'portal-videos');
 
-CREATE POLICY "Admins can upload portal videos"
+CREATE POLICY "portal_videos_insert_policy"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
@@ -195,7 +200,7 @@ WITH CHECK (
   AND public.has_role(auth.uid(), 'super_admin')
 );
 
-CREATE POLICY "Admins can update portal videos"
+CREATE POLICY "portal_videos_update_policy"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (
@@ -203,7 +208,7 @@ USING (
   AND public.has_role(auth.uid(), 'super_admin')
 );
 
-CREATE POLICY "Admins can delete portal videos"
+CREATE POLICY "portal_videos_delete_policy"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (
