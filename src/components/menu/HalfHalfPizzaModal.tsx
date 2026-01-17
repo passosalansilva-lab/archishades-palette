@@ -599,6 +599,9 @@ export function HalfHalfPizzaModal({
     if (selectedFlavors.length > 0) {
       // Regra do meio a meio por TAMANHO: usa o preço do tamanho selecionado para cada sabor
       const prices = selectedFlavors.map((f) => getFlavorPriceForSelectedSize(f));
+      
+      // Debug: log para verificar preços e regra
+      console.log('[HalfHalf] pricingRule:', pricingRule, 'prices:', prices);
 
       switch (pricingRule) {
         case 'highest':
@@ -606,16 +609,18 @@ export function HalfHalfPizzaModal({
           basePrice = Math.max(...prices);
           break;
         case 'sum':
-          // Soma proporcional: cada sabor contribui com sua fração (metade de cada em caso de 2 sabores)
-          // Resultado é igual à média neste caso, mas a lógica é diferente
-          basePrice = prices.reduce((sum, p) => sum + (p / selectedFlavors.length), 0);
+          // Soma proporcional: cada sabor contribui com sua fração (metade de cada)
+          // Para 2 sabores: (preço1 / 2) + (preço2 / 2) = média
+          basePrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
           break;
         case 'average':
         default:
           // Média: soma todos e divide pelo número de sabores
-          basePrice = prices.reduce((sum, p) => sum + p, 0) / selectedFlavors.length;
+          basePrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
           break;
       }
+      
+      console.log('[HalfHalf] basePrice calculado:', basePrice);
     }
 
     // Fallback antigo: se não temos mapa de preços por tamanho, usar base_price do tamanho (categoria)
