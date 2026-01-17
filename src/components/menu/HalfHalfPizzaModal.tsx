@@ -681,9 +681,10 @@ export function HalfHalfPizzaModal({
           name: `Sabor ${idx + 1}: ${f.name}`,
           priceModifier: 0,
         })),
+        // Opções já estão incluídas no price unitário, então priceModifier = 0 para não duplicar
         ...selectedOptions.map((opt) => ({
           name: `${opt.group_name}: ${opt.option_name}`,
-          priceModifier: opt.price_modifier,
+          priceModifier: 0,
         })),
       ],
       requiresPreparation: true, // Pizzas always need preparation
