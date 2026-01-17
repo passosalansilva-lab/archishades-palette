@@ -48,7 +48,21 @@ export function LotteryTicketsCard({
 
   const loadData = async () => {
     try {
-      // Check if lottery is enabled
+      // First check if the lottery feature is enabled for this company
+      const { data: featureData } = await supabase
+        .from('company_features' as any)
+        .select('is_active')
+        .eq('company_id', companyId)
+        .eq('feature_key', 'lottery')
+        .maybeSingle() as { data: { is_active: boolean } | null };
+
+      // If feature is explicitly disabled, don't show anything
+      if (featureData && !featureData.is_active) {
+        setLoading(false);
+        return;
+      }
+
+      // Check if lottery is enabled in settings
       const { data: settingsData, error: settingsError } = await supabase
         .from('lottery_settings')
         .select('is_enabled, prize_description, draw_frequency, tickets_per_order, tickets_per_amount')

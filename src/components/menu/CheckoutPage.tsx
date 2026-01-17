@@ -224,7 +224,7 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
     referrerId: string;
   } | null>(null);
   const [loadingReferral, setLoadingReferral] = useState(false);
-
+  const [referralFeatureEnabled, setReferralFeatureEnabled] = useState(true); // Assume enabled until checked
   // Customer referral credits state (for referrers who earned credits)
   const [customerCredits, setCustomerCredits] = useState<{
     totalAvailable: number;
@@ -409,9 +409,36 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
   // Track if we have a pending referral code (shows message to login)
   const [pendingReferralCode, setPendingReferralCode] = useState<string | null>(referralCode);
 
+  // Check if referral feature is enabled for this company
+  useEffect(() => {
+    const checkReferralFeature = async () => {
+      try {
+        const { data: featureData } = await supabase
+          .from('company_features' as any)
+          .select('is_active')
+          .eq('company_id', companyId)
+          .eq('feature_key', 'referrals')
+          .maybeSingle() as { data: { is_active: boolean } | null };
+
+        // If feature is explicitly disabled, hide referral UI
+        if (featureData && !featureData.is_active) {
+          setReferralFeatureEnabled(false);
+          setPendingReferralCode(null);
+          setReferralDiscount(null);
+        }
+      } catch (error) {
+        // Keep enabled by default on error
+      }
+    };
+    checkReferralFeature();
+  }, [companyId]);
+
   // Validate referral ONLY when customer is logged in
   useEffect(() => {
     const validateReferralForLoggedCustomer = async () => {
+      // If feature is disabled, don't validate
+      if (!referralFeatureEnabled) return;
+      
       // Only validate if we have a referral code AND customer is logged in
       if (!referralCode || !loggedCustomer?.email) {
         // If there's a code but no customer, keep it as pending
@@ -1967,8 +1994,8 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Pending referral code message */}
-              {pendingReferralCode && (
+              {/* Pending referral code message - only show if feature is enabled */}
+              {referralFeatureEnabled && pendingReferralCode && (
                 <div className="bg-success/10 border border-success/30 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <Tag className="h-5 w-5 text-success mt-0.5" />

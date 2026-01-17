@@ -34,6 +34,20 @@ export function ReferralShareCard({
 
   const loadReferralData = async () => {
     try {
+      // First check if the referrals feature is enabled for this company
+      const { data: featureData } = await supabase
+        .from('company_features' as any)
+        .select('is_active')
+        .eq('company_id', companyId)
+        .eq('feature_key', 'referrals')
+        .maybeSingle() as { data: { is_active: boolean } | null };
+
+      // If feature is explicitly disabled, don't show anything
+      if (featureData && !featureData.is_active) {
+        setLoading(false);
+        return;
+      }
+
       // Check if referral is enabled for this company
       const { data: settingsData, error: settingsError } = await supabase.functions.invoke(
         'get-customer-referral',

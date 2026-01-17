@@ -666,11 +666,26 @@ function PublicMenuContent() {
     }
   }, [company?.id]);
 
-  // Check if lottery is enabled for this company
+  // Check if lottery is enabled for this company (both feature and settings)
   useEffect(() => {
     if (!company?.id) return;
     const checkLottery = async () => {
       try {
+        // First check if the lottery feature is enabled
+        const { data: featureData } = await supabase
+          .from('company_features' as any)
+          .select('is_active')
+          .eq('company_id', company.id)
+          .eq('feature_key', 'lottery')
+          .maybeSingle() as { data: { is_active: boolean } | null };
+
+        // If feature is explicitly disabled, don't show lottery
+        if (featureData && !featureData.is_active) {
+          setLotteryEnabled(false);
+          return;
+        }
+
+        // Then check lottery settings
         const { data, error } = await supabase
           .from('lottery_settings')
           .select('is_enabled')
