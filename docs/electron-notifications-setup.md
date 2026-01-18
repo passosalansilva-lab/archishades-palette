@@ -2,152 +2,193 @@
 
 Este guia explica como configurar as notificações nativas do sistema operacional no seu app Electron do CardpOn.
 
-## Arquivos necessários no projeto Electron
+## 1. Atualize o main.js
 
-### 1. preload.js
+Adicione as seguintes alterações ao seu `main.js`:
 
-Adicione ou atualize o arquivo `preload.js` com o seguinte código:
+### 1.1 Adicione `Notification` no import
 
 ```javascript
-const { contextBridge, ipcRenderer, Notification } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, nativeImage, Notification } = require('electron')
+```
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
+### 1.2 Adicione os handlers de notificação no `setupIpcHandlers()`
+
+```javascript
+function setupIpcHandlers() {
+  // ... seus handlers existentes ...
+
+  ipcMain.on('window-minimize', () => {
+    BrowserWindow.getFocusedWindow()?.minimize()
+  })
+
+  ipcMain.on('window-maximize', () => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return
+    win.isMaximized() ? win.unmaximize() : win.maximize()
+  })
+
+  ipcMain.on('window-close', () => {
+    BrowserWindow.getFocusedWindow()?.close()
+  })
+
+  ipcMain.handle('window-is-maximized', () => {
+    return BrowserWindow.getFocusedWindow()?.isMaximized() ?? false
+  })
+
+  // ============================================
+  // NOVOS HANDLERS PARA NOTIFICAÇÕES
+  // ============================================
+  
+  ipcMain.on('focus-window', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+
+  ipcMain.on('show-notification', (event, options) => {
+    if (!Notification.isSupported()) {
+      console.log('[Electron] Notifications not supported on this system')
+      return
+    }
+
+    const iconPath = options.icon || getIconPath()
+    
+    const notification = new Notification({
+      title: options.title || 'Cardápio On',
+      body: options.body || '',
+      icon: iconPath,
+      silent: options.silent || false,
+      urgency: options.urgency || 'normal',
+    })
+
+    notification.show()
+
+    notification.on('click', () => {
+      // Foca a janela principal
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.focus()
+      }
+      
+      // Envia evento de clique para o renderer com a tag
+      if (options.tag) {
+        mainWindow?.webContents.send('notification-clicked', options.tag)
+      }
+    })
+  })
+}
+```
+
+---
+
+## 2. Atualize o preload.js
+
+Substitua ou atualize seu `preload.js` com este conteúdo:
+
+```javascript
+// preload.js
+const { contextBridge, ipcRenderer } = require('electron')
+
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Window controls
+  // ============================================
+  // CONTROLES DE JANELA (existentes)
+  // ============================================
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
-  
-  // Native notifications
+  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+
+  // ============================================
+  // NOTIFICAÇÕES NATIVAS (novos)
+  // ============================================
   showNotification: (options) => {
-    // Check if notifications are supported
-    if (!Notification.isSupported()) {
-      console.log('Notifications not supported');
-      return;
-    }
-    
-    const notification = new Notification({
+    ipcRenderer.send('show-notification', {
       title: options.title,
       body: options.body,
-      icon: options.icon || './icon.png',
+      icon: options.icon,
       silent: options.silent || false,
       urgency: options.urgency || 'normal',
-    });
-    
-    notification.show();
-    
-    // Store tag for click handling
-    notification.tag = options.tag;
-    
-    notification.on('click', () => {
-      // Send click event back to renderer
-      ipcRenderer.send('notification-clicked', options.tag);
-      
-      // Focus the window
-      ipcRenderer.send('focus-window');
-    });
+      tag: options.tag,
+    })
   },
-  
+
   onNotificationClick: (callback) => {
-    ipcRenderer.on('notification-click-response', (event, tag) => {
-      callback(tag);
-    });
+    // Remove listener anterior para evitar duplicatas
+    ipcRenderer.removeAllListeners('notification-clicked')
+    ipcRenderer.on('notification-clicked', (event, tag) => {
+      callback(tag)
+    })
   },
-});
+
+  // Foca a janela principal
+  focusWindow: () => ipcRenderer.send('focus-window'),
+})
+
+// Log para confirmar que o preload foi carregado
+console.log('[Preload] electronAPI exposta com sucesso')
 ```
 
-### 2. main.js
+---
 
-Adicione os handlers IPC no arquivo principal do Electron:
+## 3. Como funciona
 
-```javascript
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
-const path = require('path');
+1. **Detecção automática**: O app web detecta automaticamente se está rodando no Electron através do `window.electronAPI`
+2. **Fallback inteligente**: Se não estiver no Electron, usa a Web Notification API padrão do navegador
+3. **Integração transparente**: Os hooks `useOrderNotifications` e `useWaiterCallNotifications` já foram atualizados para usar notificações nativas quando disponíveis
 
-let mainWindow;
+---
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    frame: false, // Para usar a title bar customizada
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-    icon: path.join(__dirname, 'icon.png'),
-  });
+## 4. Fluxo de notificação
 
-  // Load your app
-  mainWindow.loadURL('https://your-app-url.lovable.app');
-  // Or for local development:
-  // mainWindow.loadFile('index.html');
-}
-
-// Window control handlers
-ipcMain.on('window-minimize', () => {
-  mainWindow?.minimize();
-});
-
-ipcMain.on('window-maximize', () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow?.maximize();
-  }
-});
-
-ipcMain.on('window-close', () => {
-  mainWindow?.close();
-});
-
-ipcMain.on('focus-window', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
-});
-
-// Forward notification clicks to renderer
-ipcMain.on('notification-clicked', (event, tag) => {
-  mainWindow?.webContents.send('notification-click-response', tag);
-});
-
-app.whenReady().then(createWindow);
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+```
+Novo Pedido (Supabase Realtime)
+         ↓
+useOrderNotifications detecta INSERT
+         ↓
+showSystemNotification() é chamado
+         ↓
+  ┌──────────────────────────────────┐
+  │  window.electronAPI existe?      │
+  │                                  │
+  │  SIM → ipcRenderer.send()        │
+  │        → main.js recebe          │
+  │        → new Notification()      │
+  │        → Notificação nativa OS   │
+  │                                  │
+  │  NÃO → new Notification() (web)  │
+  │        → Notificação do browser  │
+  └──────────────────────────────────┘
 ```
 
-## Como funciona
+---
 
-1. **Detecção automática**: O hook `useElectronNotifications` detecta automaticamente se está rodando no Electron
-2. **Fallback inteligente**: Se não estiver no Electron, usa a Web Notification API padrão
-3. **Integração transparente**: Os hooks existentes (`useOrderNotifications`, `useWaiterCallNotifications`) já foram atualizados para usar notificações nativas
+## 5. Testando
 
-## Testando
-
-1. Compile seu app Electron com as configurações acima
+1. Recompile seu app Electron com as alterações
 2. Faça login no sistema
-3. Quando um novo pedido chegar ou um garçom for chamado, você verá a notificação nativa do sistema operacional
+3. Peça para alguém fazer um pedido ou simule um
+4. Você deve ver a notificação nativa do Windows/macOS/Linux
 
-## Notas
+---
 
-- No Windows, as notificações aparecem no Action Center
-- No macOS, aparecem no Notification Center
-- No Linux, dependem do sistema de notificações da distribuição (libnotify)
+## 6. Notas
 
-## Permissões
+- **Windows**: As notificações aparecem no Action Center (canto inferior direito)
+- **macOS**: Aparecem no Notification Center
+- **Linux**: Dependem do sistema de notificações da distribuição (libnotify)
+- O Electron **não precisa de permissão** do usuário para notificações nativas (diferente do browser)
 
-O Electron não requer permissão explícita do usuário para mostrar notificações nativas (diferente do navegador), mas é uma boa prática informar o usuário que notificações serão enviadas.
+---
+
+## 7. Troubleshooting
+
+### Notificação não aparece
+- Verifique se `Notification.isSupported()` retorna `true` no main.js
+- No Windows, verifique se as notificações do app não estão silenciadas nas Configurações > Sistema > Notificações
+
+### Som não toca
+- O som da notificação é controlado pelo sistema operacional
+- Se `silent: true`, o som não tocará
+- O app já toca um som próprio via `useNotificationSound`, então a notificação pode ficar `silent: true` para não duplicar
