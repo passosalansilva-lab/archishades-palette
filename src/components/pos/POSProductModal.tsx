@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Minus, Plus, X, Loader2 } from 'lucide-react';
+import { Minus, Plus, X, Loader2, Check, Pizza, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface ProductOption {
   id: string;
@@ -36,6 +37,7 @@ interface OptionGroup {
   free_quantity_limit: number;
   extra_unit_price: number;
   options: ProductOption[];
+  _acaiSizeId?: string;
 }
 
 interface Product {
@@ -69,6 +71,7 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [isAcaiProduct, setIsAcaiProduct] = useState(false);
+  const [isPizzaProduct, setIsPizzaProduct] = useState(false);
   const [selectedAcaiSizeId, setSelectedAcaiSizeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,8 +91,16 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
     try {
       const categoryId = product.category_id;
 
-      // Carregar grupos e opções normais + verificar se é açaí
-      const [groupsResult, optionsResult, acaiCategoryResult, acaiSizesResult] = await Promise.all([
+      // Fetch all data in parallel
+      const [
+        groupsResult,
+        optionsResult,
+        acaiCategoryResult,
+        acaiSizesResult,
+        pizzaCategoryResult,
+        pizzaCategorySettingsResult,
+        pizzaProductSettingsResult,
+      ] = await Promise.all([
         supabase
           .from('product_option_groups')
           .select('*')
@@ -102,46 +113,92 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
           .eq('is_available', true)
           .order('sort_order'),
         categoryId
-          ? supabase
-              .from('acai_categories')
-              .select('category_id')
-              .eq('category_id', categoryId)
-              .maybeSingle()
+          ? supabase.from('acai_categories').select('category_id').eq('category_id', categoryId).maybeSingle()
           : Promise.resolve({ data: null, error: null } as any),
         categoryId
-          ? supabase
-              .from('acai_category_sizes')
-              .select('id, name, base_price, sort_order')
-              .eq('category_id', categoryId)
-              .order('sort_order')
+          ? supabase.from('acai_category_sizes').select('id, name, base_price, sort_order').eq('category_id', categoryId).order('sort_order')
           : Promise.resolve({ data: null, error: null } as any),
+        categoryId
+          ? supabase.from('pizza_categories').select('category_id').eq('category_id', categoryId).maybeSingle()
+          : Promise.resolve({ data: null, error: null } as any),
+        categoryId
+          ? supabase.from('pizza_category_settings').select('*').eq('category_id', categoryId).maybeSingle()
+          : Promise.resolve({ data: null, error: null } as any),
+        supabase.from('pizza_product_settings').select('*').eq('product_id', product.id).maybeSingle(),
       ]);
 
       const { data: groupsData, error: groupsError } = groupsResult;
       const { data: optionsData, error: optionsError } = optionsResult;
       const { data: acaiCategoryData } = acaiCategoryResult as any;
       const { data: acaiSizesData } = acaiSizesResult as any;
+      const { data: pizzaCategoryData } = pizzaCategoryResult as any;
+      const { data: pizzaCategorySettingsData } = pizzaCategorySettingsResult as any;
+      const { data: pizzaProductSettingsData } = pizzaProductSettingsResult as any;
 
       if (groupsError) throw groupsError;
       if (optionsError) throw optionsError;
 
-      // Verificar se é categoria de açaí com tamanhos configurados
-      const isAcai = !!acaiCategoryData;
-      const hasAcaiSizes = isAcai && acaiSizesData && Array.isArray(acaiSizesData) && acaiSizesData.length > 0;
-      setIsAcaiProduct(hasAcaiSizes);
+      const isAcaiCategory = !!acaiCategoryData;
+      const isPizzaCategory = !!pizzaCategoryData;
+      const hasAcaiSizes = isAcaiCategory && acaiSizesData && Array.isArray(acaiSizesData) && acaiSizesData.length > 0;
 
-      // Group options by group
-      const groups: OptionGroup[] = (groupsData || []).map((group: any) => ({
+      setIsAcaiProduct(hasAcaiSizes);
+      setIsPizzaProduct(isPizzaCategory);
+
+      // Pizza settings: product settings take priority over category settings
+      const productSettings = pizzaProductSettingsData || {};
+      const categorySettings = pizzaCategorySettingsData || {};
+      const doughMaxSelections = productSettings.dough_max_selections ?? categorySettings.dough_max_selections ?? 1;
+      const doughIsRequired = productSettings.dough_is_required ?? categorySettings.dough_is_required ?? true;
+      const crustMaxSelections = productSettings.crust_max_selections ?? categorySettings.crust_max_selections ?? 1;
+      const crustIsRequired = productSettings.crust_is_required ?? categorySettings.crust_is_required ?? false;
+
+      // Identify pizza-specific groups by name
+      const allProductGroups = groupsData || [];
+      const allProductOptions = optionsData || [];
+
+      const productSizeGroup = allProductGroups.find((g: any) => {
+        const name = (g.name || '').toLowerCase().trim();
+        return name === 'tamanho' || name === 'tamanhos' || name.includes('tamanho');
+      });
+      const productDoughGroup = allProductGroups.find((g: any) => {
+        const name = (g.name || '').toLowerCase().trim();
+        return name.includes('massa') || name === 'massas' || name === 'tipo de massa';
+      });
+      const productCrustGroup = allProductGroups.find((g: any) => {
+        const name = (g.name || '').toLowerCase().trim();
+        return name.includes('borda') || name === 'bordas';
+      });
+
+      const productSizeOptions = productSizeGroup
+        ? allProductOptions.filter((o: any) => o.group_id === productSizeGroup.id)
+        : [];
+      const productDoughOptions = productDoughGroup
+        ? allProductOptions.filter((o: any) => o.group_id === productDoughGroup.id)
+        : [];
+      const productCrustOptions = productCrustGroup
+        ? allProductOptions.filter((o: any) => o.group_id === productCrustGroup.id)
+        : [];
+
+      const hasProductSizes = isPizzaCategory && productSizeOptions.length > 0;
+
+      // Filter out pizza system groups from generic add-ons
+      const pizzaSystemGroupIds = [productSizeGroup?.id, productDoughGroup?.id, productCrustGroup?.id].filter(Boolean);
+      const filteredGroupsData = isPizzaCategory
+        ? (groupsData || []).filter((group: any) => !pizzaSystemGroupIds.includes(group.id))
+        : (groupsData || []);
+
+      const groups: OptionGroup[] = filteredGroupsData.map((group: any) => ({
         ...group,
         free_quantity_limit: group.free_quantity_limit ?? 0,
-        extra_unit_price: group.extra_unit_price ?? 0,
-        options: (optionsData || [])
+        extra_unit_price: group.extra_price ?? 0,
+        options: allProductOptions
           .filter((opt: any) => opt.group_id === group.id)
           .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
       }));
 
       // Add ungrouped options
-      const ungroupedOptions = (optionsData || []).filter((opt: any) => !opt.group_id);
+      const ungroupedOptions = allProductOptions.filter((opt: any) => !opt.group_id);
       if (ungroupedOptions.length > 0) {
         groups.push({
           id: 'ungrouped',
@@ -158,35 +215,55 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
         });
       }
 
-      // Se for açaí com tamanhos, adicionar grupo de tamanhos e carregar opções por tamanho
+      // Pizza size group
+      if (hasProductSizes) {
+        const sizeGroup: OptionGroup = {
+          id: 'pizza-size',
+          name: 'Tamanho',
+          description: 'Selecione o tamanho da pizza',
+          is_required: true,
+          min_selections: 1,
+          max_selections: 1,
+          selection_type: 'single',
+          sort_order: -30,
+          free_quantity_limit: 0,
+          extra_unit_price: 0,
+          options: productSizeOptions.map((size: any) => ({
+            id: size.id,
+            name: size.name,
+            description: null,
+            price_modifier: Number(size.price_modifier ?? 0),
+            is_required: true,
+            is_available: true,
+            sort_order: size.sort_order ?? 0,
+            group_id: 'pizza-size',
+          })),
+        };
+        groups.push(sizeGroup);
+      }
+
+      // Açaí size group
       if (hasAcaiSizes) {
         const acaiSizeIds = (acaiSizesData as any[]).map((s) => s.id);
 
-        // Buscar grupos de opções para todos os tamanhos de açaí
-        const { data: acaiOptionGroupsData, error: acaiGroupsError } = await supabase
+        const { data: acaiOptionGroupsData } = await supabase
           .from('acai_size_option_groups')
           .select('*')
           .in('size_id', acaiSizeIds)
           .order('sort_order');
 
-        if (acaiGroupsError) throw acaiGroupsError;
-
-        // Buscar opções para todos os grupos
         let acaiOptionsData: any[] = [];
         if (acaiOptionGroupsData && acaiOptionGroupsData.length > 0) {
           const groupIds = acaiOptionGroupsData.map((g: any) => g.id);
-          const { data: optData, error: optError } = await supabase
+          const { data: optData } = await supabase
             .from('acai_size_options')
             .select('*')
             .in('group_id', groupIds)
             .eq('is_available', true)
             .order('sort_order');
-
-          if (optError) throw optError;
           acaiOptionsData = optData || [];
         }
 
-        // Criar grupo de seleção de tamanho
         const acaiSizeGroup: OptionGroup = {
           id: 'acai-size',
           name: 'Tamanho',
@@ -208,13 +285,11 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
             group_id: 'acai-size',
           })),
         };
+        groups.push(acaiSizeGroup);
 
-        groups.unshift(acaiSizeGroup);
-
-        // Adicionar grupos de opções de açaí (por tamanho)
         (acaiOptionGroupsData || []).forEach((acaiGroup: any) => {
           const groupOptions = acaiOptionsData.filter((o: any) => o.group_id === acaiGroup.id);
-          const enhancedGroup: OptionGroup & { _acaiSizeId?: string } = {
+          const enhancedGroup: OptionGroup = {
             id: `acai-group-${acaiGroup.id}`,
             name: acaiGroup.name,
             description: acaiGroup.description,
@@ -241,6 +316,63 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
         });
       }
 
+      // Pizza dough group
+      const hasProductDoughs = productDoughOptions.length > 0;
+      if (isPizzaCategory && hasProductDoughs) {
+        const doughGroup: OptionGroup = {
+          id: 'pizza-dough',
+          name: productDoughGroup?.name || 'Massa',
+          description: null,
+          is_required: productDoughGroup?.is_required ?? doughIsRequired,
+          min_selections: (productDoughGroup?.is_required ?? doughIsRequired) ? 1 : 0,
+          max_selections: productDoughGroup?.max_selections ?? doughMaxSelections,
+          selection_type: (productDoughGroup?.max_selections ?? doughMaxSelections) === 1 ? 'single' : 'multiple',
+          sort_order: -20,
+          free_quantity_limit: 0,
+          extra_unit_price: 0,
+          options: productDoughOptions.map((dough: any) => ({
+            id: dough.id,
+            name: dough.name,
+            price_modifier: Number(dough.price_modifier ?? 0),
+            is_required: false,
+            is_available: true,
+            sort_order: dough.sort_order ?? 0,
+            group_id: 'pizza-dough',
+          })),
+        };
+        groups.push(doughGroup);
+      }
+
+      // Pizza crust group
+      const hasProductCrusts = productCrustOptions.length > 0;
+      if (isPizzaCategory && hasProductCrusts) {
+        const crustGroup: OptionGroup = {
+          id: 'pizza-crust',
+          name: productCrustGroup?.name || 'Borda',
+          description: null,
+          is_required: productCrustGroup?.is_required ?? crustIsRequired,
+          min_selections: (productCrustGroup?.is_required ?? crustIsRequired) ? 1 : 0,
+          max_selections: productCrustGroup?.max_selections ?? crustMaxSelections,
+          selection_type: (productCrustGroup?.max_selections ?? crustMaxSelections) === 1 ? 'single' : 'multiple',
+          sort_order: -10,
+          free_quantity_limit: 0,
+          extra_unit_price: 0,
+          options: productCrustOptions.map((crust: any) => ({
+            id: crust.id,
+            name: crust.name,
+            price_modifier: Number(crust.price_modifier ?? 0),
+            is_required: false,
+            is_available: true,
+            sort_order: crust.sort_order ?? 0,
+            group_id: 'pizza-crust',
+          })),
+        };
+        groups.push(crustGroup);
+      }
+
+      // Sort groups by sort_order
+      groups.sort((a, b) => a.sort_order - b.sort_order);
+
       setOptionGroups(groups);
     } catch (error) {
       console.error('Error loading options:', error);
@@ -253,11 +385,8 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
   if (!product) return null;
 
   const handleSingleSelect = (group: OptionGroup, option: ProductOption) => {
-    // Se selecionou um tamanho de açaí, atualiza o estado e limpa TODAS as opções anteriores
     if (group.id === 'acai-size') {
       setSelectedAcaiSizeId(option.id);
-      // Limpar todas as opções de açaí (tamanho anterior + grupos de opções)
-      // Manter apenas opções que não são de açaí
       const nonAcaiOptions = selectedOptions.filter(
         (o) => o.groupId !== 'acai-size' && !o.groupId.startsWith('acai-group-')
       );
@@ -273,8 +402,7 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
       ]);
       return;
     }
-    
-    // Para outros grupos single-select, apenas substituir a opção do mesmo grupo
+
     const filtered = selectedOptions.filter((o) => o.groupId !== group.id);
     setSelectedOptions([
       ...filtered,
@@ -288,23 +416,21 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
     ]);
   };
 
-  // Filtrar grupos visíveis (açaí mostra apenas grupos do tamanho selecionado)
   const visibleOptionGroups = optionGroups.filter((group) => {
     if (!group.id.startsWith('acai-group-')) return true;
     if (!selectedAcaiSizeId) return false;
-    const groupWithMeta = group as OptionGroup & { _acaiSizeId?: string };
-    return groupWithMeta._acaiSizeId === selectedAcaiSizeId;
+    return group._acaiSizeId === selectedAcaiSizeId;
   });
 
   const handleMultipleToggle = (group: OptionGroup, option: ProductOption) => {
     const isSelected = selectedOptions.some((o) => o.optionId === option.id);
-    
+
     if (isSelected) {
       setSelectedOptions(selectedOptions.filter((o) => o.optionId !== option.id));
     } else {
       const currentCount = selectedOptions.filter((o) => o.groupId === group.id).length;
       if (currentCount >= group.max_selections) return;
-      
+
       setSelectedOptions([
         ...selectedOptions,
         {
@@ -323,7 +449,6 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
   };
 
   const validateRequiredGroups = () => {
-    // Validar apenas grupos visíveis (considerando tamanho de açaí selecionado)
     for (const group of visibleOptionGroups) {
       if (group.is_required) {
         const count = getGroupSelectionCount(group.id);
@@ -335,7 +460,13 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
     return true;
   };
 
+  // Calculate options total (excluding size which is the base price for pizza/açaí)
   const optionsTotal = visibleOptionGroups.reduce((groupSum, group) => {
+    // Skip size groups - they define the base price
+    if (group.selection_type === 'single' && group.name.toLowerCase() === 'tamanho') {
+      return groupSum;
+    }
+
     const groupSelections = selectedOptions.filter((opt) => opt.groupId === group.id);
 
     if (group.selection_type === 'multiple' && group.free_quantity_limit > 0) {
@@ -348,19 +479,51 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
 
     return groupSum + groupSelections.reduce((sum, opt) => sum + opt.priceModifier, 0);
   }, 0);
-  
-  // Para açaí, incluir o preço do tamanho selecionado
-  const acaiSizePrice = selectedOptions.find((o) => o.groupId === 'acai-size')?.priceModifier || 0;
 
-  // Para açaí, usar preço do tamanho; para outros, preço do produto
-  const basePrice = isAcaiProduct ? acaiSizePrice : product.price;
+  // Get base price: for pizza/açaí, use selected size price; otherwise use product price
+  const getBasePriceForDisplay = (): number => {
+    const sizeGroup = optionGroups.find(
+      (group) => group.selection_type === 'single' && group.name.toLowerCase() === 'tamanho'
+    );
+
+    if (!sizeGroup) {
+      return product.price;
+    }
+
+    const selectedSize = selectedOptions.find((o) => o.groupId === sizeGroup.id);
+    if (!selectedSize) {
+      return product.price;
+    }
+
+    const isAcaiSizeGroup = sizeGroup.id === 'acai-size';
+    const isPizzaSizeGroup = sizeGroup.id === 'pizza-size';
+
+    if (isAcaiSizeGroup || isPizzaSizeGroup) {
+      return selectedSize.priceModifier;
+    }
+
+    return product.price + selectedSize.priceModifier;
+  };
+
+  const basePrice = getBasePriceForDisplay();
   const itemTotal = (basePrice + optionsTotal) * quantity;
 
   const handleAddToCart = () => {
     if (!validateRequiredGroups()) return;
-    
+
+    const sizeGroup = optionGroups.find(
+      (group) => group.selection_type === 'single' && group.name.toLowerCase() === 'tamanho'
+    );
+    const sizeGroupId = sizeGroup?.id;
+
+    // Pass base price + options (excluding size from options since it's in base price)
     const calculatedPrice = basePrice + optionsTotal;
-    onAddToCart(product, quantity, selectedOptions, notes, calculatedPrice);
+    const optionsForCart = selectedOptions.map((o) => ({
+      ...o,
+      priceModifier: o.groupId === sizeGroupId ? 0 : o.priceModifier,
+    }));
+
+    onAddToCart(product, quantity, optionsForCart, notes, calculatedPrice);
     handleClose();
   };
 
@@ -369,48 +532,35 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
     setNotes('');
     setSelectedOptions([]);
     setOptionGroups([]);
+    setIsPizzaProduct(false);
+    setIsAcaiProduct(false);
     onClose();
   };
 
   const canAddToCart = validateRequiredGroups();
-  const hasOptions = optionGroups.length > 0;
+  const hasVisibleOptions = visibleOptionGroups.length > 0;
 
   const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Verificar se há opções visíveis (considerando filtro de tamanho açaí)
-  const hasVisibleOptions = visibleOptionGroups.length > 0;
+  // Check if size is selected (for pizza/açaí)
+  const sizeGroup = optionGroups.find(
+    (group) => group.selection_type === 'single' && group.name.toLowerCase() === 'tamanho'
+  );
+  const selectedSizeOption = sizeGroup ? selectedOptions.find((o) => o.groupId === sizeGroup.id) : null;
+  const hasSizeGroup = !!sizeGroup;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent 
-        className="sm:max-w-lg w-[95vw] max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0" 
+      <DialogContent
+        className="sm:max-w-lg w-[95vw] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0"
         aria-describedby={undefined}
       >
-        {/* Header compacto */}
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-          <div className="flex-1 min-w-0 pr-4">
-            <h2 className="font-semibold text-base truncate">{product.name}</h2>
-            {!isAcaiProduct && (
-              <p className="text-primary font-bold text-sm">{formatCurrency(product.price)}</p>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full flex-shrink-0"
-            onClick={handleClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Conteúdo scrollável */}
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="p-4 space-y-4">
-            {/* Imagem do produto - mais compacta */}
+        {/* Header with product info */}
+        <div className="relative bg-gradient-to-br from-primary/5 to-primary/10 border-b">
+          <div className="flex gap-4 p-4">
             {product.image_url && (
-              <div className="relative w-full h-28 rounded-lg overflow-hidden bg-muted">
+              <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-muted flex-shrink-0 shadow-md">
                 <img
                   src={product.image_url}
                   alt={product.name}
@@ -418,30 +568,90 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                 />
               </div>
             )}
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="font-bold text-lg leading-tight line-clamp-2">{product.name}</h2>
+                  {isPizzaProduct && (
+                    <Badge variant="secondary" className="mt-1 gap-1">
+                      <Pizza className="h-3 w-3" />
+                      Pizza
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full flex-shrink-0 -mt-1 -mr-1"
+                  onClick={handleClose}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              {/* Price display */}
+              <div className="mt-2">
+                {hasSizeGroup ? (
+                  selectedSizeOption ? (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-bold text-primary">
+                        {formatCurrency(basePrice)}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedSizeOption.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      Selecione um tamanho
+                    </span>
+                  )
+                ) : (
+                  <span className="text-xl font-bold text-primary">
+                    {formatCurrency(product.price)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
+        {/* Scrollable content */}
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-4 space-y-4">
             {product.description && (
               <p className="text-sm text-muted-foreground">{product.description}</p>
             )}
 
             {loading ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : hasVisibleOptions ? (
               <div className="space-y-4">
                 {visibleOptionGroups.map((group) => (
-                  <div key={group.id} className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
+                  <div
+                    key={group.id}
+                    className={cn(
+                      'rounded-xl border bg-card overflow-hidden',
+                      group.is_required && getGroupSelectionCount(group.id) === 0 && 'border-destructive/50'
+                    )}
+                  >
+                    {/* Group header */}
+                    <div className="flex items-center justify-between gap-2 px-4 py-3 bg-muted/50 border-b">
                       <div className="min-w-0">
-                        <h4 className="font-medium text-sm truncate">{group.name}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-sm">{group.name}</h4>
+                          {group.is_required && (
+                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                              Obrigatório
+                            </Badge>
+                          )}
+                        </div>
                         {group.description && (
-                          <p className="text-xs text-muted-foreground truncate">{group.description}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{group.description}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {group.is_required && (
-                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Obrigatório</Badge>
-                        )}
                         {group.selection_type === 'multiple' && group.max_selections > 1 && (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                             {getGroupSelectionCount(group.id)}/{group.max_selections}
@@ -455,42 +665,54 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                       </div>
                     </div>
 
-                    {/* Single Selection - mais compacto */}
-                    {group.selection_type === 'single' && (
-                      <RadioGroup
-                        value={selectedOptions.find((o) => o.groupId === group.id)?.optionId || ''}
-                        onValueChange={(value) => {
-                          const option = group.options.find((o) => o.id === value);
-                          if (option) handleSingleSelect(group, option);
-                        }}
-                        className="space-y-1.5"
-                      >
-                        {group.options.map((option) => (
-                          <div
-                            key={option.id}
-                            onClick={() => handleSingleSelect(group, option)}
-                            className="flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-colors"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <RadioGroupItem value={option.id} id={`pos-${option.id}`} className="flex-shrink-0" />
-                              <Label htmlFor={`pos-${option.id}`} className="cursor-pointer text-sm truncate">
-                                {option.name}
-                              </Label>
-                            </div>
-                            {option.price_modifier !== 0 && (
-                              <span className={`text-xs font-medium flex-shrink-0 ${option.price_modifier > 0 ? 'text-primary' : 'text-green-600'}`}>
-                                {option.price_modifier > 0 ? '+' : ''}{formatCurrency(option.price_modifier)}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    )}
-
-                    {/* Multiple Selection - mais compacto */}
-                    {group.selection_type === 'multiple' && (
-                      <div className="space-y-1.5">
-                        {group.options.map((option) => {
+                    {/* Options */}
+                    <div className="divide-y">
+                      {group.selection_type === 'single' ? (
+                        <RadioGroup
+                          value={selectedOptions.find((o) => o.groupId === group.id)?.optionId || ''}
+                          onValueChange={(value) => {
+                            const option = group.options.find((o) => o.id === value);
+                            if (option) handleSingleSelect(group, option);
+                          }}
+                        >
+                          {group.options.map((option) => {
+                            const isSelected = selectedOptions.some((o) => o.optionId === option.id);
+                            return (
+                              <div
+                                key={option.id}
+                                onClick={() => handleSingleSelect(group, option)}
+                                className={cn(
+                                  'flex items-center justify-between px-4 py-3 cursor-pointer transition-colors',
+                                  isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'
+                                )}
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <RadioGroupItem value={option.id} id={`pos-${option.id}`} />
+                                  <Label
+                                    htmlFor={`pos-${option.id}`}
+                                    className="cursor-pointer text-sm font-medium"
+                                  >
+                                    {option.name}
+                                  </Label>
+                                </div>
+                                {option.price_modifier !== 0 && (
+                                  <span
+                                    className={cn(
+                                      'text-sm font-semibold flex-shrink-0',
+                                      option.price_modifier > 0 ? 'text-primary' : 'text-green-600'
+                                    )}
+                                  >
+                                    {group.name.toLowerCase() === 'tamanho'
+                                      ? formatCurrency(option.price_modifier)
+                                      : `${option.price_modifier > 0 ? '+' : ''}${formatCurrency(option.price_modifier)}`}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </RadioGroup>
+                      ) : (
+                        group.options.map((option) => {
                           const isSelected = selectedOptions.some((o) => o.optionId === option.id);
                           const currentCount = getGroupSelectionCount(group.id);
                           const maxReached = currentCount >= group.max_selections && !isSelected;
@@ -499,85 +721,100 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                             <div
                               key={option.id}
                               onClick={() => !maxReached && handleMultipleToggle(group, option)}
-                              className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-colors cursor-pointer ${
+                              className={cn(
+                                'flex items-center justify-between px-4 py-3 cursor-pointer transition-colors',
                                 isSelected
-                                  ? 'border-primary bg-primary/5'
+                                  ? 'bg-primary/5'
                                   : maxReached
-                                  ? 'border-border opacity-50 cursor-not-allowed'
-                                  : 'border-border hover:border-primary/30'
-                              }`}
+                                  ? 'opacity-50 cursor-not-allowed'
+                                  : 'hover:bg-muted/50'
+                              )}
                             >
-                              <div className="flex items-center gap-2 min-w-0">
+                              <div className="flex items-center gap-3 min-w-0">
                                 <Checkbox
                                   checked={isSelected}
                                   disabled={maxReached}
                                   onCheckedChange={() => handleMultipleToggle(group, option)}
-                                  className="flex-shrink-0"
                                 />
-                                <span className="text-sm truncate">{option.name}</span>
+                                <span className="text-sm font-medium">{option.name}</span>
                               </div>
                               {option.price_modifier !== 0 && (
-                                <span className={`text-xs font-medium flex-shrink-0 ${option.price_modifier > 0 ? 'text-primary' : 'text-green-600'}`}>
-                                  {option.price_modifier > 0 ? '+' : ''}{formatCurrency(option.price_modifier)}
+                                <span
+                                  className={cn(
+                                    'text-sm font-semibold flex-shrink-0',
+                                    option.price_modifier > 0 ? 'text-primary' : 'text-green-600'
+                                  )}
+                                >
+                                  {option.price_modifier > 0 ? '+' : ''}
+                                  {formatCurrency(option.price_modifier)}
                                 </span>
                               )}
                             </div>
                           );
-                        })}
-                      </div>
-                    )}
+                        })
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-3">
-                Este produto não possui adicionais
-              </p>
+              <div className="text-center py-6 text-muted-foreground">
+                <p className="text-sm">Este produto não possui adicionais</p>
+              </div>
             )}
 
-            {/* Notes - mais compacto */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Observações</Label>
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Observações</Label>
               <Textarea
                 placeholder="Ex: sem cebola, bem passado..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                className="resize-none text-sm min-h-[56px]"
+                className="resize-none text-sm"
               />
             </div>
           </div>
         </ScrollArea>
 
-        {/* Footer fixo e compacto */}
-        <div className="border-t bg-background p-3 space-y-3">
-          {/* Quantity */}
-          <div className="flex items-center justify-center gap-3">
+        {/* Footer with quantity and add button */}
+        <div className="border-t bg-background p-4 space-y-3">
+          {/* Price summary */}
+          {optionsTotal > 0 && (
+            <div className="flex items-center justify-between text-sm px-1">
+              <span className="text-muted-foreground">Adicionais:</span>
+              <span className="font-medium text-primary">+{formatCurrency(optionsTotal)}</span>
+            </div>
+          )}
+
+          {/* Quantity controls */}
+          <div className="flex items-center justify-center gap-4">
             <Button
               variant="outline"
               size="icon"
-              className="h-9 w-9"
+              className="h-10 w-10 rounded-full"
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
             >
               <Minus className="h-4 w-4" />
             </Button>
-            <span className="text-lg font-bold w-10 text-center">{quantity}</span>
+            <span className="text-xl font-bold w-12 text-center">{quantity}</span>
             <Button
               variant="outline"
               size="icon"
-              className="h-9 w-9"
+              className="h-10 w-10 rounded-full"
               onClick={() => setQuantity(quantity + 1)}
             >
               <Plus className="h-4 w-4" />
             </Button>
           </div>
 
-          {/* Add button */}
+          {/* Add to cart button */}
           <Button
-            className="w-full h-11 text-sm font-semibold"
+            className="w-full h-12 text-base font-semibold gap-2"
             onClick={handleAddToCart}
             disabled={!canAddToCart}
           >
+            <Check className="h-5 w-5" />
             Adicionar • {formatCurrency(itemTotal)}
           </Button>
         </div>
