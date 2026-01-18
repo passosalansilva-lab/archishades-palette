@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -19,12 +22,16 @@ import {
   Sun,
   Moon,
   Volume2,
-  VolumeX
+  VolumeX,
+  Package,
+  User,
+  FileText,
+  ArrowRight
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-
+import { motion, AnimatePresence } from "framer-motion";
 
 const KDS_THEME_KEY = "kds-theme-mode";
 const KDS_SOUND_ENABLED_KEY = "kds-sound-enabled";
@@ -57,10 +64,10 @@ interface Company {
 }
 
 const statusConfig = {
-  pending: { label: "Pendente", color: "bg-yellow-500", icon: Clock },
-  confirmed: { label: "Aguardando", color: "bg-blue-500", icon: Clock },
-  preparing: { label: "Preparando", color: "bg-orange-500", icon: ChefHat },
-  ready: { label: "Pronto", color: "bg-green-500", icon: CheckCircle },
+  pending: { label: "Pendente", color: "bg-yellow-500", textColor: "text-yellow-500", bgLight: "bg-yellow-500/10", icon: Clock },
+  confirmed: { label: "Aguardando", color: "bg-blue-500", textColor: "text-blue-500", bgLight: "bg-blue-500/10", icon: Clock },
+  preparing: { label: "Preparando", color: "bg-orange-500", textColor: "text-orange-500", bgLight: "bg-orange-500/10", icon: ChefHat },
+  ready: { label: "Pronto", color: "bg-green-500", textColor: "text-green-500", bgLight: "bg-green-500/10", icon: CheckCircle },
 };
 
 export default function PublicKDS() {
@@ -73,6 +80,7 @@ export default function PublicKDS() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [interactionMode, setInteractionMode] = useState(true);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem(KDS_THEME_KEY);
     return saved ? saved === "dark" : true;
@@ -118,7 +126,7 @@ export default function PublicKDS() {
     }
   }, [soundEnabled]);
 
-  // Update clock every second for more precision
+  // Update clock every second
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
@@ -193,10 +201,7 @@ export default function PublicKDS() {
       
       // Check for new orders and play sound
       if (!isFirstLoadRef.current && newOrders.length > 0) {
-        const newOrderIds = new Set(newOrders.map(o => o.id));
         const previousIds = previousOrderIdsRef.current;
-        
-        // Find truly new orders (not in previous set)
         const hasNewOrder = newOrders.some(order => 
           !previousIds.has(order.id) && order.status === 'confirmed'
         );
@@ -211,6 +216,11 @@ export default function PublicKDS() {
       isFirstLoadRef.current = false;
       
       setOrders(newOrders);
+      
+      // Auto-select first order if none selected
+      if (newOrders.length > 0 && !selectedOrderId) {
+        setSelectedOrderId(newOrders[0].id);
+      }
     } catch (err) {
       console.error("Error fetching KDS orders:", err);
     } finally {
@@ -266,6 +276,16 @@ export default function PublicKDS() {
         description: `Pedido marcado como ${statusConfig[newStatus]?.label || newStatus}`,
       });
 
+      // If order is no longer in KDS view, select next order
+      if (newStatus === "ready") {
+        const remainingOrders = orders.filter(o => o.id !== orderId);
+        if (remainingOrders.length > 0) {
+          setSelectedOrderId(remainingOrders[0].id);
+        } else {
+          setSelectedOrderId(null);
+        }
+      }
+
       fetchOrders();
     } catch (err) {
       console.error("Error updating order status:", err);
@@ -297,31 +317,23 @@ export default function PublicKDS() {
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
-  // Calculate time since order in minutes
-  const getMinutesSince = (createdAt: string) => {
+  // Calculate time since order
+  const getTimeSince = (createdAt: string) => {
+    return formatDistanceToNow(new Date(createdAt), { 
+      locale: ptBR, 
+      addSuffix: false 
+    });
+  };
+
+  // Check if order is taking too long (> 15 min)
+  const isOrderLate = (createdAt: string) => {
     const orderTime = new Date(createdAt).getTime();
     const now = Date.now();
-    return Math.floor((now - orderTime) / 1000 / 60);
+    const diffMinutes = (now - orderTime) / 1000 / 60;
+    return diffMinutes > 15;
   };
 
-  // Format time display
-  const formatTime = (createdAt: string) => {
-    const minutes = getMinutesSince(createdAt);
-    if (minutes < 60) return `${minutes}min`;
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h${mins > 0 ? ` ${mins}min` : ''}`;
-  };
-
-  // Check if order is taking too long
-  const getOrderUrgency = (createdAt: string): 'normal' | 'warning' | 'urgent' => {
-    const minutes = getMinutesSince(createdAt);
-    if (minutes > 20) return 'urgent';
-    if (minutes > 10) return 'warning';
-    return 'normal';
-  };
-
-  // Format options for display
+  // Format options for display - with grouping
   const formatOptions = (options: any): { groupName: string; items: string[] }[] => {
     if (!options) return [];
     const grouped: Record<string, string[]> = {};
@@ -359,6 +371,8 @@ export default function PublicKDS() {
 
   const confirmedOrders = orders.filter((o) => o.status === "confirmed");
   const preparingOrders = orders.filter((o) => o.status === "preparing");
+  const allQueueOrders = [...confirmedOrders, ...preparingOrders];
+  const selectedOrder = orders.find(o => o.id === selectedOrderId);
 
   if (loading) {
     return (
@@ -397,248 +411,94 @@ export default function PublicKDS() {
     );
   }
 
-  // Order ticket component
-  const OrderTicket = ({ order, status }: { order: KDSOrder; status: 'confirmed' | 'preparing' }) => {
-    const urgency = getOrderUrgency(order.created_at);
-    const isConfirmed = status === 'confirmed';
-    const StatusIcon = statusConfig[status].icon;
-    
-    return (
-      <div
-        className={cn(
-          "rounded-xl overflow-hidden shadow-xl",
-          isDarkMode ? "bg-slate-800" : "bg-white",
-          urgency === 'urgent' && "ring-4 ring-red-500",
-          urgency === 'warning' && "ring-2 ring-amber-500"
-        )}
-      >
-        {/* Ticket Header */}
-        <div className={cn(
-          "px-4 py-3 flex items-center justify-between",
-          isConfirmed ? "bg-blue-600" : "bg-orange-500"
-        )}>
-          <div className="flex items-center gap-2">
-            <div className="bg-white/20 rounded-lg px-2 py-1">
-              <span className="text-white font-mono font-bold text-lg">
-                #{order.id.slice(0, 6).toUpperCase()}
-              </span>
-            </div>
-            {order.table_session_id && (
-              <Badge className="bg-white/20 text-white border-0">
-                <Utensils className="h-3 w-3 mr-1" />
-                Mesa
-              </Badge>
-            )}
-          </div>
-          <div className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded-lg text-sm font-bold",
-            urgency === 'urgent' ? "bg-red-600 text-white" :
-            urgency === 'warning' ? "bg-amber-500 text-white" :
-            "bg-white/20 text-white"
-          )}>
-            <Timer className="h-4 w-4" />
-            {formatTime(order.created_at)}
-          </div>
-        </div>
-
-        {/* Customer Name */}
-        <div className={cn(
-          "px-4 py-2 border-b",
-          isDarkMode 
-            ? "bg-slate-700 border-slate-600" 
-            : "bg-slate-100 border-slate-200"
-        )}>
-          <p className={cn(
-            "font-semibold truncate",
-            isDarkMode ? "text-white" : "text-slate-800"
-          )}>
-            {order.customer_name}
-          </p>
-        </div>
-
-        {/* Order Items */}
-        <div className={cn(
-          "p-4 space-y-3",
-          isDarkMode ? "bg-slate-800" : "bg-white"
-        )}>
-          {order.order_items
-            .filter((item) => item.requires_preparation)
-            .map((item) => (
-              <div key={item.id} className="flex gap-3">
-                <div className={cn(
-                  "flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center",
-                  isDarkMode ? "bg-slate-600" : "bg-slate-900"
-                )}>
-                  <span className="text-white font-bold text-lg">{item.quantity}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn(
-                    "font-bold text-base leading-tight",
-                    isDarkMode ? "text-white" : "text-slate-900"
-                  )}>
-                    {item.product_name}
-                  </p>
-                  {formatOptions(item.options).map((group, i) => (
-                    <p key={i} className={cn(
-                      "text-sm leading-tight mt-0.5",
-                      isDarkMode ? "text-slate-300" : "text-slate-600"
-                    )}>
-                      {group.groupName ? (
-                        <><span className="font-medium">{group.groupName}:</span> {group.items.join(', ')}</>
-                      ) : (
-                        group.items.map((name, idx) => (
-                          <span key={idx}>• {name}{idx < group.items.length - 1 ? ' ' : ''}</span>
-                        ))
-                      )}
-                    </p>
-                  ))}
-                  {item.notes && (
-                    <p className="text-sm text-amber-700 font-medium mt-1 bg-amber-50 px-2 py-0.5 rounded inline-block">
-                      📝 {item.notes}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-        </div>
-
-        {/* Order Notes */}
-        {order.notes && (
-          <div className={cn("px-4 pb-3", isDarkMode ? "bg-slate-800" : "bg-white")}>
-            <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
-              <p className="text-sm text-amber-800 font-medium">
-                📝 {order.notes}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Action Button */}
-        {interactionMode && (
-          <div className={cn(
-            "p-3 border-t",
-            isDarkMode 
-              ? "bg-slate-700 border-slate-600" 
-              : "bg-slate-50 border-slate-200"
-          )}>
-            <Button
-              className={cn(
-                "w-full h-14 text-lg font-bold rounded-xl transition-all active:scale-95",
-                isConfirmed 
-                  ? "bg-orange-500 hover:bg-orange-600 text-white" 
-                  : "bg-green-600 hover:bg-green-700 text-white"
-              )}
-              onClick={() => updateOrderStatus(order.id, isConfirmed ? "preparing" : "ready")}
-            >
-              {isConfirmed ? (
-                <>
-                  <ChefHat className="h-6 w-6 mr-2" />
-                  INICIAR PREPARO
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-6 w-6 mr-2" />
-                  PRONTO
-                </>
-              )}
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className={cn(
-      "min-h-screen transition-colors duration-300",
+      "min-h-screen flex flex-col transition-colors duration-300",
       isDarkMode ? "bg-slate-950" : "bg-slate-100"
     )}>
       {/* Header */}
       <header className={cn(
-        "border-b px-6 py-4 transition-colors duration-300",
+        "border-b px-4 md:px-6 py-3 transition-colors duration-300 shrink-0",
         isDarkMode 
           ? "bg-slate-900 border-slate-800" 
           : "bg-white border-slate-200 shadow-sm"
       )}>
         <div className="flex items-center justify-between">
           {/* Left: Logo & Title */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {company?.logo_url && (
               <img 
                 src={company.logo_url} 
                 alt={company.name} 
                 className={cn(
-                  "h-12 w-12 rounded-xl object-cover border-2",
+                  "h-10 w-10 rounded-xl object-cover border-2",
                   isDarkMode ? "border-slate-700" : "border-slate-200"
                 )}
               />
             )}
             <div>
               <h1 className={cn(
-                "text-2xl font-bold flex items-center gap-2",
+                "text-xl font-bold flex items-center gap-2",
                 isDarkMode ? "text-white" : "text-slate-900"
               )}>
-                <ChefHat className="h-7 w-7 text-orange-500" />
+                <ChefHat className="h-6 w-6 text-orange-500" />
                 Cozinha
               </h1>
-              <p className={isDarkMode ? "text-sm text-slate-400" : "text-sm text-slate-600"}>
+              <p className={cn("text-xs", isDarkMode ? "text-slate-400" : "text-slate-600")}>
                 {company?.name}
               </p>
             </div>
           </div>
 
           {/* Center: Stats */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-4">
             <div className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl",
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg",
               isDarkMode ? "bg-blue-500/20" : "bg-blue-100"
             )}>
-              <Clock className={isDarkMode ? "h-5 w-5 text-blue-400" : "h-5 w-5 text-blue-600"} />
+              <Clock className={isDarkMode ? "h-4 w-4 text-blue-400" : "h-4 w-4 text-blue-600"} />
               <span className={cn(
-                "text-2xl font-bold",
+                "text-xl font-bold",
                 isDarkMode ? "text-blue-400" : "text-blue-600"
               )}>{confirmedOrders.length}</span>
-              <span className={isDarkMode ? "text-sm text-blue-300" : "text-sm text-blue-600"}>aguardando</span>
+              <span className={cn("text-xs", isDarkMode ? "text-blue-300" : "text-blue-600")}>aguardando</span>
             </div>
             <div className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl",
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg",
               isDarkMode ? "bg-orange-500/20" : "bg-orange-100"
             )}>
-              <ChefHat className={isDarkMode ? "h-5 w-5 text-orange-400" : "h-5 w-5 text-orange-600"} />
+              <ChefHat className={isDarkMode ? "h-4 w-4 text-orange-400" : "h-4 w-4 text-orange-600"} />
               <span className={cn(
-                "text-2xl font-bold",
+                "text-xl font-bold",
                 isDarkMode ? "text-orange-400" : "text-orange-600"
               )}>{preparingOrders.length}</span>
-              <span className={isDarkMode ? "text-sm text-orange-300" : "text-sm text-orange-600"}>preparando</span>
+              <span className={cn("text-xs", isDarkMode ? "text-orange-300" : "text-orange-600")}>preparando</span>
             </div>
-            {orders.filter(o => getOrderUrgency(o.created_at) === 'urgent').length > 0 && (
+            {orders.filter(o => isOrderLate(o.created_at)).length > 0 && (
               <div className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl",
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg",
                 isDarkMode ? "bg-red-500/20" : "bg-red-100"
               )}>
-                <Timer className={isDarkMode ? "h-5 w-5 text-red-400" : "h-5 w-5 text-red-600"} />
+                <Timer className={isDarkMode ? "h-4 w-4 text-red-400" : "h-4 w-4 text-red-600"} />
                 <span className={cn(
-                  "text-2xl font-bold",
+                  "text-xl font-bold",
                   isDarkMode ? "text-red-400" : "text-red-600"
                 )}>
-                  {orders.filter(o => getOrderUrgency(o.created_at) === 'urgent').length}
+                  {orders.filter(o => isOrderLate(o.created_at)).length}
                 </span>
-                <span className={isDarkMode ? "text-sm text-red-300" : "text-sm text-red-600"}>urgentes</span>
+                <span className={cn("text-xs", isDarkMode ? "text-red-300" : "text-red-600")}>atrasados</span>
               </div>
             )}
           </div>
 
           {/* Right: Clock & Controls */}
-          <div className="flex items-center gap-3">
-            <div className="text-right mr-2">
+          <div className="flex items-center gap-2">
+            <div className="text-right mr-2 hidden sm:block">
               <p className={cn(
-                "text-3xl font-mono font-bold",
+                "text-2xl font-mono font-bold",
                 isDarkMode ? "text-white" : "text-slate-900"
               )}>
                 {currentTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-              </p>
-              <p className={isDarkMode ? "text-xs text-slate-500" : "text-xs text-slate-500"}>
-                {currentTime.toLocaleDateString("pt-BR", { weekday: 'short', day: '2-digit', month: 'short' })}
               </p>
             </div>
             
@@ -648,19 +508,15 @@ export default function PublicKDS() {
               size="icon"
               onClick={() => setSoundEnabled(!soundEnabled)}
               className={cn(
+                "h-9 w-9",
                 soundEnabled
                   ? "bg-green-600 hover:bg-green-700 text-white border-green-600"
                   : isDarkMode 
                     ? "border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" 
                     : "border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               )}
-              title={soundEnabled ? "Desativar som de novos pedidos" : "Ativar som de novos pedidos"}
             >
-              {soundEnabled ? (
-                <Volume2 className="h-4 w-4" />
-              ) : (
-                <VolumeX className="h-4 w-4" />
-              )}
+              {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
             
             {/* Theme Toggle */}
@@ -669,17 +525,13 @@ export default function PublicKDS() {
               size="icon"
               onClick={() => setIsDarkMode(!isDarkMode)}
               className={cn(
+                "h-9 w-9",
                 isDarkMode 
                   ? "border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" 
                   : "border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               )}
-              title={isDarkMode ? "Mudar para tema claro" : "Mudar para tema escuro"}
             >
-              {isDarkMode ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
+              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
             
             {/* Interaction Mode Toggle */}
@@ -688,26 +540,16 @@ export default function PublicKDS() {
               size="sm"
               onClick={() => setInteractionMode(!interactionMode)}
               className={cn(
-                "gap-2",
+                "gap-1 h-9",
                 interactionMode 
                   ? "bg-green-600 hover:bg-green-700 text-white" 
                   : isDarkMode
                     ? "border-slate-600 text-slate-400 hover:text-white"
                     : "border-slate-300 text-slate-600 hover:text-slate-900"
               )}
-              title={interactionMode ? "Clique para desabilitar botões (modo TV)" : "Clique para habilitar botões (modo Tablet)"}
             >
-              {interactionMode ? (
-                <>
-                  <Hand className="h-4 w-4" />
-                  <span className="hidden sm:inline">Touch</span>
-                </>
-              ) : (
-                <>
-                  <MousePointer2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Só Ver</span>
-                </>
-              )}
+              {interactionMode ? <Hand className="h-4 w-4" /> : <MousePointer2 className="h-4 w-4" />}
+              <span className="hidden sm:inline">{interactionMode ? "Touch" : "Ver"}</span>
             </Button>
 
             <Button 
@@ -715,11 +557,11 @@ export default function PublicKDS() {
               size="icon" 
               onClick={fetchOrders}
               className={cn(
+                "h-9 w-9",
                 isDarkMode 
                   ? "border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" 
                   : "border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               )}
-              title="Atualizar pedidos"
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
@@ -728,17 +570,13 @@ export default function PublicKDS() {
               size="icon" 
               onClick={toggleFullscreen}
               className={cn(
+                "h-9 w-9",
                 isDarkMode 
                   ? "border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" 
                   : "border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               )}
-              title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
             >
-              {isFullscreen ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -746,7 +584,7 @@ export default function PublicKDS() {
 
       {/* Mobile Stats */}
       <div className={cn(
-        "md:hidden flex items-center justify-center gap-4 p-3 border-b",
+        "md:hidden flex items-center justify-center gap-4 p-2 border-b shrink-0",
         isDarkMode 
           ? "bg-slate-900/50 border-slate-800" 
           : "bg-white/50 border-slate-200"
@@ -773,85 +611,346 @@ export default function PublicKDS() {
         </div>
       </div>
 
-      {/* Orders Grid */}
-      <main className="p-4 md:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Confirmed / Waiting Column */}
+      {/* Main Content - Queue + Details */}
+      <main className="flex-1 p-4 md:p-6 min-h-0">
+        <div className="h-full grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Left Side - Order Queue */}
           <div className={cn(
-            "rounded-2xl border overflow-hidden",
+            "lg:col-span-4 flex flex-col min-h-0 rounded-2xl border overflow-hidden",
             isDarkMode 
-              ? "bg-slate-900/50 border-slate-800" 
-              : "bg-white/80 border-slate-200 shadow-sm"
+              ? "bg-slate-900 border-slate-800" 
+              : "bg-white border-slate-200 shadow-sm"
           )}>
             <div className={cn(
-              "flex items-center gap-3 p-4 border-b",
-              isDarkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-slate-50"
+              "flex items-center gap-2 p-4 border-b shrink-0",
+              isDarkMode ? "border-slate-800 bg-slate-800/50" : "border-slate-200 bg-slate-50"
             )}>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600">
-                <Clock className="h-5 w-5 text-white" />
-                <span className="text-lg font-bold text-white">Aguardando</span>
-              </div>
-              <span className={isDarkMode ? "text-slate-500 text-sm" : "text-slate-600 text-sm"}>
-                {confirmedOrders.length} pedidos
-              </span>
+              <Package className={isDarkMode ? "h-5 w-5 text-blue-400" : "h-5 w-5 text-blue-600"} />
+              <h2 className={cn("font-semibold", isDarkMode ? "text-white" : "text-slate-900")}>
+                Fila de Pedidos
+              </h2>
+              <Badge variant="secondary" className="ml-auto">
+                {allQueueOrders.length}
+              </Badge>
             </div>
             
-            <div className="p-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                {confirmedOrders.map((order) => (
-                  <OrderTicket key={order.id} order={order} status="confirmed" />
-                ))}
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="space-y-2 p-3">
+                <AnimatePresence>
+                  {allQueueOrders.length === 0 ? (
+                    <div className={cn(
+                      "text-center py-12",
+                      isDarkMode ? "text-slate-500" : "text-slate-400"
+                    )}>
+                      <Package className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                      <p className="text-sm">Nenhum pedido na fila</p>
+                    </div>
+                  ) : (
+                    allQueueOrders.map((order, index) => (
+                      <motion.div
+                        key={order.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -50 }}
+                        transition={{ duration: 0.2, delay: index * 0.05 }}
+                      >
+                        <div
+                          className={cn(
+                            "cursor-pointer transition-all rounded-xl p-3 border-l-4",
+                            selectedOrderId === order.id 
+                              ? isDarkMode
+                                ? "ring-2 ring-blue-500 bg-slate-700"
+                                : "ring-2 ring-blue-500 bg-blue-50"
+                              : isDarkMode
+                                ? "bg-slate-800 hover:bg-slate-700"
+                                : "bg-white hover:bg-slate-50",
+                            order.status === "confirmed" 
+                              ? "border-l-blue-500" 
+                              : "border-l-orange-500",
+                            isOrderLate(order.created_at) && "border-l-red-500"
+                          )}
+                          onClick={() => setSelectedOrderId(order.id)}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "font-mono font-bold text-sm",
+                                  isDarkMode ? "text-white" : "text-slate-900"
+                                )}>
+                                  #{order.id.slice(0, 6).toUpperCase()}
+                                </span>
+                                {order.table_session_id && (
+                                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                                    <Utensils className="h-3 w-3 mr-1" />
+                                    Mesa
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className={cn(
+                                "text-sm truncate",
+                                isDarkMode ? "text-slate-400" : "text-slate-600"
+                              )}>
+                                {order.customer_name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge 
+                                  variant="secondary"
+                                  className={cn(
+                                    "text-xs px-1.5 py-0",
+                                    statusConfig[order.status as keyof typeof statusConfig]?.bgLight,
+                                    statusConfig[order.status as keyof typeof statusConfig]?.textColor
+                                  )}
+                                >
+                                  {statusConfig[order.status as keyof typeof statusConfig]?.label}
+                                </Badge>
+                                <span className={cn(
+                                  "text-xs",
+                                  isDarkMode ? "text-slate-500" : "text-slate-500"
+                                )}>
+                                  {order.order_items.filter(i => i.requires_preparation).length} itens
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs",
+                                  isOrderLate(order.created_at)
+                                    ? "border-red-500 text-red-500"
+                                    : isDarkMode
+                                      ? "border-slate-600 text-slate-400"
+                                      : "border-slate-300 text-slate-500"
+                                )}
+                              >
+                                <Timer className="h-3 w-3 mr-1" />
+                                {getTimeSince(order.created_at)}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </AnimatePresence>
               </div>
-
-              {confirmedOrders.length === 0 && (
-                <div className={cn(
-                  "text-center py-16",
-                  isDarkMode ? "text-slate-600" : "text-slate-400"
-                )}>
-                  <Clock className="h-16 w-16 mx-auto mb-3 opacity-30" />
-                  <p className="text-lg">Nenhum pedido aguardando</p>
-                </div>
-              )}
-            </div>
+            </ScrollArea>
           </div>
 
-          {/* Preparing Column */}
-          <div className={cn(
-            "rounded-2xl border overflow-hidden",
-            isDarkMode 
-              ? "bg-slate-900/50 border-slate-800" 
-              : "bg-white/80 border-slate-200 shadow-sm"
-          )}>
-            <div className={cn(
-              "flex items-center gap-3 p-4 border-b",
-              isDarkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-slate-50"
-            )}>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500">
-                <ChefHat className="h-5 w-5 text-white" />
-                <span className="text-lg font-bold text-white">Em Preparo</span>
-              </div>
-              <span className={isDarkMode ? "text-slate-500 text-sm" : "text-slate-600 text-sm"}>
-                {preparingOrders.length} pedidos
-              </span>
-            </div>
-            
-            <div className="p-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                {preparingOrders.map((order) => (
-                  <OrderTicket key={order.id} order={order} status="preparing" />
-                ))}
-              </div>
-
-              {preparingOrders.length === 0 && (
+          {/* Right Side - Order Details */}
+          <div className="lg:col-span-8 flex flex-col min-h-0">
+            {selectedOrder ? (
+              <motion.div
+                key={selectedOrder.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col h-full"
+              >
                 <div className={cn(
-                  "text-center py-16",
-                  isDarkMode ? "text-slate-600" : "text-slate-400"
+                  "flex-1 flex flex-col rounded-2xl border overflow-hidden",
+                  isDarkMode 
+                    ? "bg-slate-900 border-slate-800" 
+                    : "bg-white border-slate-200 shadow-sm"
                 )}>
-                  <ChefHat className="h-16 w-16 mx-auto mb-3 opacity-30" />
-                  <p className="text-lg">Nenhum pedido em preparo</p>
+                  {/* Order Header */}
+                  <div className={cn(
+                    "p-4 border-b shrink-0",
+                    isDarkMode ? "border-slate-800" : "border-slate-200"
+                  )}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-3">
+                          <h2 className={cn(
+                            "text-xl font-bold",
+                            isDarkMode ? "text-white" : "text-slate-900"
+                          )}>
+                            Pedido #{selectedOrder.id.slice(0, 8).toUpperCase()}
+                          </h2>
+                          <Badge 
+                            className={cn(
+                              "text-sm",
+                              statusConfig[selectedOrder.status as keyof typeof statusConfig]?.bgLight,
+                              statusConfig[selectedOrder.status as keyof typeof statusConfig]?.textColor
+                            )}
+                          >
+                            {statusConfig[selectedOrder.status as keyof typeof statusConfig]?.label}
+                          </Badge>
+                          {selectedOrder.table_session_id && (
+                            <Badge variant="outline">
+                              <Utensils className="h-3 w-3 mr-1" />
+                              Mesa
+                            </Badge>
+                          )}
+                        </div>
+                        <div className={cn(
+                          "flex items-center gap-4 mt-2 text-sm",
+                          isDarkMode ? "text-slate-400" : "text-slate-600"
+                        )}>
+                          <div className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            {selectedOrder.customer_name}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            {getTimeSince(selectedOrder.created_at)} atrás
+                          </div>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-lg px-3 py-1",
+                          isOrderLate(selectedOrder.created_at)
+                            ? "border-red-500 text-red-500 bg-red-500/10"
+                            : isDarkMode
+                              ? "border-slate-600 text-slate-400"
+                              : "border-slate-300 text-slate-600"
+                        )}
+                      >
+                        <Timer className="h-4 w-4 mr-2" />
+                        {getTimeSince(selectedOrder.created_at)}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Order Items */}
+                  <ScrollArea className="flex-1 min-h-0">
+                    <div className="p-4 space-y-4">
+                      {selectedOrder.order_items
+                        .filter((item) => item.requires_preparation)
+                        .map((item, idx) => (
+                          <motion.div
+                            key={item.id}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            className={cn(
+                              "flex gap-4 p-4 rounded-xl border",
+                              isDarkMode 
+                                ? "bg-slate-800 border-slate-700" 
+                                : "bg-slate-50 border-slate-200"
+                            )}
+                          >
+                            <div className={cn(
+                              "flex items-center justify-center w-12 h-12 rounded-lg font-bold text-xl shrink-0",
+                              isDarkMode 
+                                ? "bg-blue-500/20 text-blue-400" 
+                                : "bg-blue-100 text-blue-600"
+                            )}>
+                              {item.quantity}x
+                            </div>
+                            <div className="flex-1">
+                              <h4 className={cn(
+                                "font-semibold text-lg",
+                                isDarkMode ? "text-white" : "text-slate-900"
+                              )}>
+                                {item.product_name}
+                              </h4>
+                              {formatOptions(item.options).map((group, i) => (
+                                <div key={i} className={cn(
+                                  "text-sm mt-1",
+                                  isDarkMode ? "text-slate-400" : "text-slate-600"
+                                )}>
+                                  {group.groupName ? (
+                                    <>
+                                      <span className="font-medium">{group.groupName}:</span>{" "}
+                                      {group.items.join(', ')}
+                                    </>
+                                  ) : (
+                                    group.items.map((itemName, idx) => (
+                                      <span key={idx} className="inline-block mr-2">
+                                        • {itemName}
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                              ))}
+                              {item.notes && (
+                                <div className="mt-2 p-2 rounded bg-amber-500/10 text-amber-600 text-sm flex items-start gap-2">
+                                  <FileText className="h-4 w-4 shrink-0 mt-0.5" />
+                                  {item.notes}
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        ))}
+
+                      {selectedOrder.order_items.filter(i => i.requires_preparation).length === 0 && (
+                        <div className={cn(
+                          "text-center py-8",
+                          isDarkMode ? "text-slate-500" : "text-slate-400"
+                        )}>
+                          <Package className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                          <p>Nenhum item requer preparo</p>
+                        </div>
+                      )}
+
+                      {selectedOrder.notes && (
+                        <div className={cn(
+                          "p-3 rounded-lg border",
+                          isDarkMode 
+                            ? "bg-yellow-500/10 border-yellow-500/20" 
+                            : "bg-yellow-50 border-yellow-200"
+                        )}>
+                          <div className="flex items-start gap-2 text-yellow-600">
+                            <FileText className="h-5 w-5 shrink-0" />
+                            <div>
+                              <p className="font-medium">Observações do pedido:</p>
+                              <p className="text-sm">{selectedOrder.notes}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+
+                  {/* Action Buttons */}
+                  {interactionMode && (
+                    <div className={cn(
+                      "p-4 border-t shrink-0",
+                      isDarkMode ? "border-slate-800" : "border-slate-200"
+                    )}>
+                      {selectedOrder.status === "confirmed" ? (
+                        <Button
+                          className="w-full h-14 text-lg bg-orange-500 hover:bg-orange-600"
+                          onClick={() => updateOrderStatus(selectedOrder.id, "preparing")}
+                        >
+                          <ChefHat className="h-6 w-6 mr-3" />
+                          Iniciar Preparo
+                          <ArrowRight className="h-5 w-5 ml-3" />
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+                          onClick={() => updateOrderStatus(selectedOrder.id, "ready")}
+                        >
+                          <CheckCircle className="h-6 w-6 mr-3" />
+                          Marcar como Pronto
+                          <ArrowRight className="h-5 w-5 ml-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </motion.div>
+            ) : (
+              <div className={cn(
+                "flex-1 flex items-center justify-center rounded-2xl border",
+                isDarkMode 
+                  ? "bg-slate-900 border-slate-800" 
+                  : "bg-white border-slate-200 shadow-sm"
+              )}>
+                <div className={cn(
+                  "text-center",
+                  isDarkMode ? "text-slate-500" : "text-slate-400"
+                )}>
+                  <Package className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                  <p className="text-lg">Selecione um pedido na fila</p>
+                  <p className="text-sm">para ver os detalhes e gerenciar</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
