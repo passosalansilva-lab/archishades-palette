@@ -123,9 +123,14 @@ const handler = async (req: Request): Promise<Response> => {
       .eq("verified", true)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !verificationRecord) {
+    if (fetchError) {
+      console.error("Error checking verification:", fetchError);
+      throw new Error("Erro ao verificar email");
+    }
+
+    if (!verificationRecord) {
       console.log("Email not verified:", email);
       return new Response(
         JSON.stringify({ error: "Email não verificado. Por favor, verifique seu email primeiro." }),
