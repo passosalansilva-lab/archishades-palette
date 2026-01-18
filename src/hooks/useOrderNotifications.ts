@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { showSystemNotification, isElectron } from '@/hooks/useElectronNotifications';
 
 interface OrderPayload {
   id: string;
@@ -334,6 +335,18 @@ export function useOrderNotifications() {
               audioRef.current.play().catch(console.error);
             }
 
+            // Show system notification (native in Electron, web otherwise)
+            showSystemNotification({
+              title: `🛒 Novo Pedido de ${newOrder.customer_name}!`,
+              body: `Valor: R$ ${Number(newOrder.total).toFixed(2)}`,
+              icon: '/pwa-192x192.png',
+              tag: `new-order-${newOrder.id}`,
+              onClick: () => {
+                window.focus();
+                window.location.href = '/dashboard/orders';
+              },
+            });
+
             toast.success(`Novo pedido de ${newOrder.customer_name}!`, {
               description: `Valor: R$ ${Number(newOrder.total).toFixed(2)}`,
               duration: 10000,
@@ -345,13 +358,15 @@ export function useOrderNotifications() {
               },
             });
 
-            // Send push notification to store owner
-            await notifyStoreNewOrder(
-              company.id,
-              newOrder.id,
-              newOrder.customer_name,
-              Number(newOrder.total)
-            );
+            // Send push notification to store owner (for mobile/PWA)
+            if (!isElectron()) {
+              await notifyStoreNewOrder(
+                company.id,
+                newOrder.id,
+                newOrder.customer_name,
+                Number(newOrder.total)
+              );
+            }
           }
         )
         .on(

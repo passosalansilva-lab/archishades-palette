@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { showSystemNotification } from '@/hooks/useElectronNotifications';
 
 export function useWaiterCallNotifications() {
   const { toast } = useToast();
@@ -74,14 +75,16 @@ export function useWaiterCallNotifications() {
               console.log('[WaiterCalls] Could not play sound:', e);
             }
 
-            // Try to send browser notification
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification(`${callType} - ${tableName}`, {
-                body: 'Clique para ver os detalhes',
-                icon: '/favicon.png',
-                tag: `waiter-call-${call.id}`,
-              });
-            }
+            // Send system notification (works in Electron and browser)
+            showSystemNotification({
+              title: `${callType} - ${tableName}`,
+              body: 'Clique para ver os detalhes',
+              icon: '/favicon.png',
+              tag: `waiter-call-${call.id}`,
+              onClick: () => {
+                window.location.href = '/dashboard/tables';
+              },
+            });
           }
         )
         .subscribe();
