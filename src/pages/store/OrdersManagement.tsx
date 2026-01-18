@@ -229,6 +229,7 @@ export default function OrdersManagement() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [modalOrder, setModalOrder] = useState<Order | null>(null); // Separate state for modal in other tabs
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('active');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('today');
@@ -1444,7 +1445,7 @@ export default function OrdersManagement() {
                           <OrderCard
                             key={order.id}
                             order={order}
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => setModalOrder(order)}
                           />
                         ))}
                         {statusOrders.length === 0 && (
@@ -1484,7 +1485,7 @@ export default function OrdersManagement() {
                           <OrderCard
                             key={order.id}
                             order={order}
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => setModalOrder(order)}
                           />
                         ))}
                         {statusOrders.length === 0 && (
@@ -1524,7 +1525,7 @@ export default function OrdersManagement() {
                           <OrderCard
                             key={order.id}
                             order={order}
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => setModalOrder(order)}
                           />
                         ))}
                         {statusOrders.length === 0 && (
@@ -1560,7 +1561,7 @@ export default function OrdersManagement() {
             </div>
             <OrdersList
               orders={filteredOrders}
-              onViewOrder={setSelectedOrder}
+              onViewOrder={setModalOrder}
             />
           </TabsContent>
 
@@ -1583,23 +1584,23 @@ export default function OrdersManagement() {
             </div>
             <OrdersList
               orders={filteredOrders}
-              onViewOrder={setSelectedOrder}
+              onViewOrder={setModalOrder}
             />
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Order Details Modal */}
-      <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
+      {/* Order Details Modal - for tabs other than 'active' */}
+      <Dialog open={!!modalOrder} onOpenChange={() => setModalOrder(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="font-display">
-                Pedido #{selectedOrder?.id.slice(0, 8)}
+                Pedido #{modalOrder?.id.slice(0, 8)}
               </DialogTitle>
-              {selectedOrder && (
+              {modalOrder && (
                 <PrintReceipt
-                  order={selectedOrder}
+                  order={modalOrder}
                   companyName={companyName}
                   autoPrintEnabled={autoPrintKitchen}
                   autoPrintMode={autoPrintMode}
@@ -1609,29 +1610,29 @@ export default function OrdersManagement() {
             </div>
           </DialogHeader>
 
-          {selectedOrder && (
+          {modalOrder && (
             <div className="space-y-6">
               {/* Source Badge - Destacado */}
               <div className="flex justify-center">
-                {selectedOrder.source === 'pos' && (
+                {modalOrder.source === 'pos' && (
                   <Badge className="text-sm px-4 py-1.5 bg-violet-500 text-white font-semibold">
                     <Store className="h-4 w-4 mr-2" />
                     Pedido PDV
                   </Badge>
                 )}
-                {selectedOrder.source === 'table' && (
+                {modalOrder.source === 'table' && (
                   <Badge className="text-sm px-4 py-1.5 bg-amber-500 text-white font-semibold">
                     <UtensilsCrossed className="h-4 w-4 mr-2" />
                     Pedido Mesa
                   </Badge>
                 )}
-                {selectedOrder.source === 'pickup' && (
+                {modalOrder.source === 'pickup' && (
                   <Badge className="text-sm px-4 py-1.5 bg-emerald-500 text-white font-semibold">
                     <Package className="h-4 w-4 mr-2" />
                     Retirada no Balcão
                   </Badge>
                 )}
-                {(!selectedOrder.source || selectedOrder.source === 'online') && (
+                {(!modalOrder.source || modalOrder.source === 'online') && (
                   <Badge className="text-sm px-4 py-1.5 bg-sky-500 text-white font-semibold">
                     <Smartphone className="h-4 w-4 mr-2" />
                     Pedido Online
@@ -1642,11 +1643,11 @@ export default function OrdersManagement() {
               {/* Status */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${statusConfig[selectedOrder.status].color}`} />
-                  <span className="font-medium">{getStatusLabel(selectedOrder.status, selectedOrder.source)}</span>
+                  <div className={`w-3 h-3 rounded-full ${statusConfig[modalOrder.status].color}`} />
+                  <span className="font-medium">{getStatusLabel(modalOrder.status, modalOrder.source)}</span>
                 </div>
                 <span className="text-sm text-muted-foreground">
-                  {formatDistanceToNow(new Date(selectedOrder.created_at), {
+                  {formatDistanceToNow(new Date(modalOrder.created_at), {
                     addSuffix: true,
                     locale: ptBR,
                   })}
@@ -1654,21 +1655,21 @@ export default function OrdersManagement() {
               </div>
 
               {/* Status Actions */}
-              {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+              {modalOrder.status !== 'delivered' && modalOrder.status !== 'cancelled' && (
                 <div className="flex gap-2">
-                  {getNextStatus(selectedOrder.status, selectedOrder.source) && (
+                  {getNextStatus(modalOrder.status, modalOrder.source) && (
                     <Button
                       className="flex-1 gradient-primary text-primary-foreground"
                       onClick={() =>
                         updateOrderStatus(
-                          selectedOrder.id,
-                          getNextStatus(selectedOrder.status, selectedOrder.source)!
+                          modalOrder.id,
+                          getNextStatus(modalOrder.status, modalOrder.source)!
                         )
                       }
                       disabled={updatingStatus}
                     >
                       {updatingStatus && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                      Avançar para "{getStatusLabel(getNextStatus(selectedOrder.status, selectedOrder.source)!, selectedOrder.source)}"
+                      Avançar para "{getStatusLabel(getNextStatus(modalOrder.status, modalOrder.source)!, modalOrder.source)}"
                     </Button>
                   )}
                   <Button
@@ -1676,7 +1677,7 @@ export default function OrdersManagement() {
                     className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
                     disabled={updatingStatus}
                     onClick={() => {
-                      setOrderToCancel(selectedOrder);
+                      setOrderToCancel(modalOrder);
                       setShowCancelDialog(true);
                     }}
                   >
@@ -1686,11 +1687,14 @@ export default function OrdersManagement() {
               )}
 
               {/* Converter para Delivery - só aparece para retirada */}
-              {selectedOrder.source === 'pickup' && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+              {modalOrder.source === 'pickup' && modalOrder.status !== 'delivered' && modalOrder.status !== 'cancelled' && (
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => setShowConvertToDeliveryDialog(true)}
+                  onClick={() => {
+                    setSelectedOrder(modalOrder); // Set for convertToDelivery function
+                    setShowConvertToDeliveryDialog(true);
+                  }}
                 >
                   <Truck className="h-4 w-4 mr-2" />
                   Converter para Delivery
@@ -1702,59 +1706,59 @@ export default function OrdersManagement() {
               {/* Customer Info */}
               <div className="space-y-2">
                 <h4 className="font-medium text-sm text-muted-foreground">Cliente</h4>
-                <p className="font-medium">{selectedOrder.customer_name}</p>
+                <p className="font-medium">{modalOrder.customer_name}</p>
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <a href={`tel:${selectedOrder.customer_phone}`} className="hover:underline">
-                    {selectedOrder.customer_phone}
+                  <a href={`tel:${modalOrder.customer_phone}`} className="hover:underline">
+                    {modalOrder.customer_phone}
                   </a>
                 </div>
-                {selectedOrder.customer_email && (
-                  <p className="text-sm text-muted-foreground">{selectedOrder.customer_email}</p>
+                {modalOrder.customer_email && (
+                  <p className="text-sm text-muted-foreground">{modalOrder.customer_email}</p>
                 )}
               </div>
 
               {/* Address */}
-              {selectedOrder.customer_addresses && (
+              {modalOrder.customer_addresses && (
                 <div className="space-y-2">
                   <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
                     Endereço de Entrega
                   </h4>
                   <p className="text-sm">
-                    {selectedOrder.customer_addresses.street}, {selectedOrder.customer_addresses.number}
-                    {selectedOrder.customer_addresses.complement && `, ${selectedOrder.customer_addresses.complement}`}
+                    {modalOrder.customer_addresses.street}, {modalOrder.customer_addresses.number}
+                    {modalOrder.customer_addresses.complement && `, ${modalOrder.customer_addresses.complement}`}
                   </p>
                   <p className="text-sm">
-                    {selectedOrder.customer_addresses.neighborhood} - {selectedOrder.customer_addresses.city}/{selectedOrder.customer_addresses.state}
+                    {modalOrder.customer_addresses.neighborhood} - {modalOrder.customer_addresses.city}/{modalOrder.customer_addresses.state}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    CEP: {selectedOrder.customer_addresses.zip_code}
+                    CEP: {modalOrder.customer_addresses.zip_code}
                   </p>
-                  {selectedOrder.customer_addresses.reference && (
+                  {modalOrder.customer_addresses.reference && (
                     <p className="text-sm text-muted-foreground italic">
-                      Ref: {selectedOrder.customer_addresses.reference}
+                      Ref: {modalOrder.customer_addresses.reference}
                     </p>
                   )}
                 </div>
               )}
 
               {/* Driver Assignment Section - Apenas para pedidos de entrega (delivery) */}
-              {(selectedOrder.status === 'ready' || selectedOrder.status === 'awaiting_driver' || selectedOrder.status === 'out_for_delivery') && 
-               selectedOrder.source !== 'table' && 
-               selectedOrder.source !== 'pickup' && 
-               selectedOrder.source !== 'pos' && (
+              {(modalOrder.status === 'ready' || modalOrder.status === 'awaiting_driver' || modalOrder.status === 'out_for_delivery') && 
+               modalOrder.source !== 'table' && 
+               modalOrder.source !== 'pickup' && 
+               modalOrder.source !== 'pos' && (
                 <div className="space-y-3">
                   <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
                     <Truck className="h-4 w-4" />
                     Entregador
                   </h4>
                   
-                  {selectedOrder.delivery_driver_id ? (
+                  {modalOrder.delivery_driver_id ? (
                     <div className="space-y-3">
                       {/* Current driver info */}
                       {(() => {
-                        const currentDriver = availableDrivers.find(d => d.id === selectedOrder.delivery_driver_id);
+                        const currentDriver = availableDrivers.find(d => d.id === modalOrder.delivery_driver_id);
                         return currentDriver ? (
                           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                             <div>
@@ -1783,7 +1787,7 @@ export default function OrdersManagement() {
                     })()}
                         
                       {/* Show reassign option quando não saiu para entrega */}
-                      {selectedOrder.status !== 'out_for_delivery' && (
+                      {modalOrder.status !== 'out_for_delivery' && (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2 text-sm text-amber-600">
                             <AlertTriangle className="h-4 w-4" />
@@ -1793,14 +1797,14 @@ export default function OrdersManagement() {
                             <p className="text-sm font-medium">Reatribuir para outro entregador:</p>
                             <div className="grid gap-2">
                               {availableDrivers
-                                .filter(d => d.id !== selectedOrder.delivery_driver_id && d.is_available && d.driver_status === 'available')
+                                .filter(d => d.id !== modalOrder.delivery_driver_id && d.is_available && d.driver_status === 'available')
                                 .map((driver) => (
                                   <Button
                                     key={driver.id}
                                     variant="outline"
                                     size="sm"
                                     className="justify-start"
-                                    onClick={() => reassignDriverToOrder(selectedOrder.id, driver.id)}
+                                    onClick={() => reassignDriverToOrder(modalOrder.id, driver.id)}
                                     disabled={assigningDriver}
                                   >
                                     {assigningDriver ? (
@@ -1811,7 +1815,7 @@ export default function OrdersManagement() {
                                     {driver.driver_name || 'Entregador'}
                                   </Button>
                                 ))}
-                              {availableDrivers.filter(d => d.id !== selectedOrder.delivery_driver_id && d.is_available && d.driver_status === 'available').length === 0 && (
+                              {availableDrivers.filter(d => d.id !== modalOrder.delivery_driver_id && d.is_available && d.driver_status === 'available').length === 0 && (
                                 <p className="text-sm text-muted-foreground">Nenhum outro entregador disponível</p>
                               )}
                             </div>
@@ -1834,7 +1838,7 @@ export default function OrdersManagement() {
                                 variant="outline"
                                 size="sm"
                                 className="justify-start"
-                                onClick={() => assignDriverToOrder(selectedOrder.id, driver.id)}
+                                onClick={() => assignDriverToOrder(modalOrder.id, driver.id)}
                                 disabled={assigningDriver}
                               >
                                 {assigningDriver ? (
@@ -1859,7 +1863,7 @@ export default function OrdersManagement() {
               {/* Items */}
               <div className="space-y-3">
                 <h4 className="font-medium text-sm text-muted-foreground">Itens do Pedido</h4>
-                {selectedOrder.order_items?.map((item) => {
+                {modalOrder.order_items?.map((item) => {
                   const options = Array.isArray(item.options) ? item.options as { name: string; priceModifier: number }[] : [];
                   return (
                     <div key={item.id} className="flex justify-between text-sm">
@@ -1885,10 +1889,10 @@ export default function OrdersManagement() {
               </div>
 
               {/* Notes */}
-              {selectedOrder.notes && (
+              {modalOrder.notes && (
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-sm font-medium">Observações:</p>
-                  <p className="text-sm text-muted-foreground">{selectedOrder.notes}</p>
+                  <p className="text-sm text-muted-foreground">{modalOrder.notes}</p>
                 </div>
               )}
 
@@ -1898,63 +1902,63 @@ export default function OrdersManagement() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span>R$ {Number(selectedOrder.subtotal).toFixed(2)}</span>
+                  <span>R$ {Number(modalOrder.subtotal).toFixed(2)}</span>
                 </div>
-                {(selectedOrder.discount_amount ?? 0) > 0 && (
+                {(modalOrder.discount_amount ?? 0) > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
                     <span className="flex items-center gap-1">
                       Desconto
-                      {selectedOrder.coupons?.code && (
+                      {modalOrder.coupons?.code && (
                         <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                          {selectedOrder.coupons.code}
+                          {modalOrder.coupons.code}
                         </Badge>
                       )}
-                      {!selectedOrder.coupons?.code && selectedOrder.customer_referral_codes && (
+                      {!modalOrder.coupons?.code && modalOrder.customer_referral_codes && (
                         <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                          Indicação{selectedOrder.customer_referral_codes.customers?.name ? ` de ${selectedOrder.customer_referral_codes.customers.name}` : ''}
+                          Indicação{modalOrder.customer_referral_codes.customers?.name ? ` de ${modalOrder.customer_referral_codes.customers.name}` : ''}
                         </Badge>
                       )}
                     </span>
-                    <span>-R$ {Number(selectedOrder.discount_amount).toFixed(2)}</span>
+                    <span>-R$ {Number(modalOrder.discount_amount).toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Taxa de entrega</span>
-                  <span>R$ {Number(selectedOrder.delivery_fee).toFixed(2)}</span>
+                  <span>R$ {Number(modalOrder.delivery_fee).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-bold">
                   <span>Total</span>
-                  <span className="text-primary">R$ {Number(selectedOrder.total).toFixed(2)}</span>
+                  <span className="text-primary">R$ {Number(modalOrder.total).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm pt-2 items-center gap-2">
                   <span className="text-muted-foreground">Pagamento</span>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <Badge variant="outline">
-                      {paymentMethodLabels[selectedOrder.payment_method]}
+                      {paymentMethodLabels[modalOrder.payment_method]}
                     </Badge>
-                    {selectedOrder.payment_method === 'online' && (
+                    {modalOrder.payment_method === 'online' && (
                   <Badge 
-                        variant={selectedOrder.payment_status === 'paid' ? 'default' : 'secondary'}
-                        className={selectedOrder.payment_status === 'paid' ? 'bg-emerald-500 text-white' : selectedOrder.payment_status === 'failed' ? 'bg-destructive text-destructive-foreground' : ''}
+                        variant={modalOrder.payment_status === 'paid' ? 'default' : 'secondary'}
+                        className={modalOrder.payment_status === 'paid' ? 'bg-emerald-500 text-white' : modalOrder.payment_status === 'failed' ? 'bg-destructive text-destructive-foreground' : ''}
                       >
-                        {selectedOrder.payment_status === 'paid' && '✓ Pago'}
-                        {selectedOrder.payment_status === 'pending' && 'Aguardando'}
-                        {selectedOrder.payment_status === 'failed' && 'Falhou'}
+                        {modalOrder.payment_status === 'paid' && '✓ Pago'}
+                        {modalOrder.payment_status === 'pending' && 'Aguardando'}
+                        {modalOrder.payment_status === 'failed' && 'Falhou'}
                       </Badge>
                     )}
-                    {selectedOrder.payment_method === 'pix' && (
+                    {modalOrder.payment_method === 'pix' && (
                       <Badge 
-                        variant={selectedOrder.payment_status === 'paid' ? 'default' : 'secondary'}
-                        className={selectedOrder.payment_status === 'paid' ? 'bg-emerald-500 text-white' : selectedOrder.payment_status === 'failed' ? 'bg-destructive text-destructive-foreground' : ''}
+                        variant={modalOrder.payment_status === 'paid' ? 'default' : 'secondary'}
+                        className={modalOrder.payment_status === 'paid' ? 'bg-emerald-500 text-white' : modalOrder.payment_status === 'failed' ? 'bg-destructive text-destructive-foreground' : ''}
                       >
-                        {selectedOrder.payment_status === 'paid' && '✓ Pago'}
-                        {selectedOrder.payment_status === 'pending' && 'Aguardando'}
-                        {selectedOrder.payment_status === 'failed' && 'Falhou'}
+                        {modalOrder.payment_status === 'paid' && '✓ Pago'}
+                        {modalOrder.payment_status === 'pending' && 'Aguardando'}
+                        {modalOrder.payment_status === 'failed' && 'Falhou'}
                       </Badge>
                     )}
-                    {selectedOrder.payment_method === 'cash' && selectedOrder.needs_change && (
+                    {modalOrder.payment_method === 'cash' && modalOrder.needs_change && (
                       <Badge variant="secondary">
-                        Troco para R$ {Number(selectedOrder.change_for || selectedOrder.total).toFixed(2)}
+                        Troco para R$ {Number(modalOrder.change_for || modalOrder.total).toFixed(2)}
                       </Badge>
                     )}
                   </div>
@@ -1962,21 +1966,21 @@ export default function OrdersManagement() {
               </div>
 
               {/* NFe Button - Only for delivered orders with CNPJ configured */}
-              {nfeEnabled && companyCnpj && selectedOrder.status === 'delivered' && (
+              {nfeEnabled && companyCnpj && modalOrder.status === 'delivered' && (
                 <div className="pt-4 border-t">
-                  {orderNfeStatus[selectedOrder.id] ? (
+                  {orderNfeStatus[modalOrder.id] ? (
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm">
                         <FileText className="h-4 w-4" />
                         <span>Nota Fiscal:</span>
                         <Badge 
-                          variant={orderNfeStatus[selectedOrder.id] === 'authorized' ? 'default' : 'secondary'}
-                          className={orderNfeStatus[selectedOrder.id] === 'authorized' ? 'bg-emerald-500' : ''}
+                          variant={orderNfeStatus[modalOrder.id] === 'authorized' ? 'default' : 'secondary'}
+                          className={orderNfeStatus[modalOrder.id] === 'authorized' ? 'bg-emerald-500' : ''}
                         >
-                          {orderNfeStatus[selectedOrder.id] === 'authorized' && 'Emitida'}
-                          {orderNfeStatus[selectedOrder.id] === 'pending' && 'Pendente'}
-                          {orderNfeStatus[selectedOrder.id] === 'processing' && 'Processando'}
-                          {orderNfeStatus[selectedOrder.id] === 'error' && 'Erro'}
+                          {orderNfeStatus[modalOrder.id] === 'authorized' && 'Emitida'}
+                          {orderNfeStatus[modalOrder.id] === 'pending' && 'Pendente'}
+                          {orderNfeStatus[modalOrder.id] === 'processing' && 'Processando'}
+                          {orderNfeStatus[modalOrder.id] === 'error' && 'Erro'}
                         </Badge>
                       </div>
                       <Button variant="outline" size="sm" asChild>
@@ -1987,7 +1991,7 @@ export default function OrdersManagement() {
                     <Button 
                       variant="outline" 
                       className="w-full"
-                      onClick={() => issueNfe(selectedOrder.id)}
+                      onClick={() => issueNfe(modalOrder.id)}
                       disabled={issuingNfe}
                     >
                       {issuingNfe ? (
@@ -2002,7 +2006,7 @@ export default function OrdersManagement() {
               )}
               
               {/* NFe not available message - when enabled but no CNPJ */}
-              {nfeEnabled && !companyCnpj && selectedOrder.status === 'delivered' && (
+              {nfeEnabled && !companyCnpj && modalOrder.status === 'delivered' && (
                 <div className="pt-4 border-t">
                   <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
                     <div className="flex gap-2 items-start">
@@ -2020,7 +2024,7 @@ export default function OrdersManagement() {
               )}
 
               {/* Refund History */}
-              <OrderRefundHistory orderId={selectedOrder.id} />
+              <OrderRefundHistory orderId={modalOrder.id} />
             </div>
           )}
         </DialogContent>
