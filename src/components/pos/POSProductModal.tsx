@@ -568,26 +568,14 @@ export function POSProductModal({ product, open, onClose, onAddToCart }: POSProd
                 />
               </div>
             )}
-            <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h2 className="font-bold text-lg leading-tight line-clamp-2">{product.name}</h2>
-                  {isPizzaProduct && (
-                    <Badge variant="secondary" className="mt-1 gap-1">
-                      <Pizza className="h-3 w-3" />
-                      Pizza
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-full flex-shrink-0 -mt-1 -mr-1"
-                  onClick={handleClose}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center pr-8">
+              <h2 className="font-bold text-lg leading-tight line-clamp-2">{product.name}</h2>
+              {isPizzaProduct && (
+                <Badge variant="secondary" className="mt-1 gap-1">
+                  <Pizza className="h-3 w-3" />
+                  Pizza
+                </Badge>
+              )}
               {/* Price display */}
               <div className="mt-2">
                 {hasSizeGroup ? (
