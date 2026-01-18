@@ -699,7 +699,13 @@ export default function OrdersManagement() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      if (data.offersCreated === 0) {
+      if (data.directAssignment) {
+        // Single driver was assigned directly
+        toast({
+          title: 'Entrega atribuída!',
+          description: `Entrega atribuída diretamente para ${data.driverName}`,
+        });
+      } else if (data.offersCreated === 0) {
         toast({
           title: 'Nenhum entregador disponível',
           description: 'Não há entregadores online no momento. Tente novamente mais tarde.',
@@ -995,6 +1001,13 @@ export default function OrdersManagement() {
           .eq('id', order.id);
 
         if (error) throw error;
+
+        // Cancel any pending offers for this order (cleanup)
+        await supabase
+          .from('order_offers')
+          .update({ status: 'cancelled' })
+          .eq('order_id', order.id)
+          .eq('status', 'pending');
 
         // If this was a table order, check if we need to close the table session
         if (order.table_session_id) {

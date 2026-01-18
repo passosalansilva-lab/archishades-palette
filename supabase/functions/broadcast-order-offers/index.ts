@@ -181,6 +181,66 @@ serve(async (req) => {
       );
     }
 
+    // If there's only ONE driver available, assign directly instead of creating offers
+    if (eligibleDrivers.length === 1) {
+      const singleDriver = eligibleDrivers[0];
+      console.log(`[broadcast-order-offers] Only 1 driver available (${singleDriver.driver_name}), assigning directly`);
+
+      // Update order with the driver and status
+      const { error: directAssignError } = await supabaseAdmin
+        .from("orders")
+        .update({ 
+          delivery_driver_id: singleDriver.id,
+          status: "out_for_delivery" 
+        })
+        .eq("id", orderId);
+
+      if (directAssignError) {
+        console.error("[broadcast-order-offers] Error assigning single driver", directAssignError);
+        throw directAssignError;
+      }
+
+      // Send notification to the driver if they have a user_id
+      if (singleDriver.user_id) {
+        await supabaseAdmin.from("notifications").insert({
+          user_id: singleDriver.user_id,
+          title: "Nova entrega atribuída!",
+          message: "Uma nova entrega foi atribuída a você.",
+          type: "info",
+          data: { type: "driver_assignment", order_id: orderId, company_id: companyId },
+        });
+
+        try {
+          await supabaseAdmin.functions.invoke("send-push-notification", {
+            body: {
+              userId: singleDriver.user_id,
+              companyId: companyId,
+              userType: "driver",
+              payload: {
+                title: "Nova entrega atribuída!",
+                body: "Uma nova entrega foi atribuída a você.",
+                tag: `driver-assignment-${orderId}`,
+                data: { type: "driver_assignment", orderId, companyId, url: "/driver" },
+              },
+            },
+          });
+        } catch (pushError) {
+          console.error("[broadcast-order-offers] Error sending push to single driver", pushError);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Entrega atribuída diretamente para ${singleDriver.driver_name}`,
+          offersCreated: 0,
+          directAssignment: true,
+          driverName: singleDriver.driver_name,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     console.log(`[broadcast-order-offers] Found ${eligibleDrivers.length} eligible drivers (including those without login)`);
 
     // Cancel any existing pending offers for this order

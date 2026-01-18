@@ -764,6 +764,13 @@ export default function DriverDashboard() {
       return;
     }
 
+    // Cancel any pending offers for this order (cleanup)
+    await driverSupabase
+      .from('order_offers')
+      .update({ status: 'cancelled' })
+      .eq('order_id', orderId)
+      .eq('status', 'pending');
+
     // Register the delivery in driver_deliveries
     const deliveryFee = driver.per_delivery_fee || 0;
     await driverSupabase
