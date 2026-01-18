@@ -63,17 +63,18 @@ interface OrderQueueProps {
 
 export function OrderQueue({ orders, selectedOrderId, onSelectOrder, title = "Fila de Pedidos" }: OrderQueueProps) {
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-3 px-1">
+    <div className="flex flex-col h-full bg-card rounded-xl border shadow-sm overflow-hidden">
+      {/* Header fixo com fundo */}
+      <div className="flex items-center gap-2 p-4 border-b bg-muted/30 shrink-0">
         <Package className="h-5 w-5 text-primary" />
         <h2 className="font-semibold">{title}</h2>
-        <Badge variant="secondary" className="ml-auto">
+        <Badge variant="secondary" className="ml-auto text-sm font-bold">
           {orders.length}
         </Badge>
       </div>
       
-      <ScrollArea className="flex-1">
-        <div className="space-y-2 pr-2">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="space-y-2 p-3">
           <AnimatePresence>
             {orders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
