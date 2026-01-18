@@ -35,23 +35,31 @@ const handler = async (req: Request): Promise<Response> => {
     // Create Supabase client with service role
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Find the verification code
+    // Find the verification code (idempotent: accepts already-verified codes too)
     const { data: verificationRecord, error: fetchError } = await supabase
       .from("email_verification_codes")
       .select("*")
       .eq("email", email)
       .eq("code", code)
-      .eq("verified", false)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !verificationRecord) {
       console.log("Invalid or expired code for:", email);
       return new Response(
         JSON.stringify({ error: "Código inválido ou expirado. Solicite um novo código." }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // If already verified, return success (prevents dead-end when user creation failed after verification)
+    if (verificationRecord.verified) {
+      console.log(`Email already verified: ${email}`);
+      return new Response(
+        JSON.stringify({ success: true, message: "Email já verificado" }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
