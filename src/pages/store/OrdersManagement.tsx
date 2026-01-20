@@ -1257,6 +1257,12 @@ export default function OrdersManagement() {
     return true;
   });
 
+  // Na fila de pedidos (tab "Ativos"), ordena do mais antigo para o mais novo
+  const activeQueueOrders = [...filteredOrders].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+
   const ordersByStatus = {
     pending: filteredOrders.filter((o) => o.status === 'pending'),
     confirmed: filteredOrders.filter((o) => o.status === 'confirmed'),
@@ -1409,7 +1415,7 @@ export default function OrdersManagement() {
               {/* Left: Order Queue */}
               <div className="col-span-4 xl:col-span-3 min-h-0">
                 <OrderQueue
-                  orders={filteredOrders}
+                  orders={activeQueueOrders}
                   selectedOrderId={selectedOrder?.id || null}
                   onSelectOrder={setSelectedOrder}
                   title="Pedidos Ativos"

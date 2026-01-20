@@ -72,7 +72,7 @@ export function OrderQueue({ orders, selectedOrderId, onSelectOrder, title = "Fi
           {orders.length}
         </Badge>
       </div>
-      
+
       <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-2 p-3">
           <AnimatePresence>
@@ -93,6 +93,7 @@ export function OrderQueue({ orders, selectedOrderId, onSelectOrder, title = "Fi
                   <OrderQueueCard
                     order={order}
                     isSelected={selectedOrderId === order.id}
+                    isOldest={index === 0}
                     onClick={() => onSelectOrder(order)}
                   />
                 </motion.div>
@@ -108,13 +109,14 @@ export function OrderQueue({ orders, selectedOrderId, onSelectOrder, title = "Fi
 interface OrderQueueCardProps {
   order: Order;
   isSelected: boolean;
+  isOldest: boolean;
   onClick: () => void;
 }
 
-function OrderQueueCard({ order, isSelected, onClick }: OrderQueueCardProps) {
+function OrderQueueCard({ order, isSelected, isOldest, onClick }: OrderQueueCardProps) {
   const isOnlinePayment = order.payment_method === 'pix' || order.payment_method === 'online';
   const isPaid = order.payment_status === 'paid';
-  
+
   const getSourceBadge = () => {
     switch (order.source) {
       case 'pos':
@@ -132,9 +134,8 @@ function OrderQueueCard({ order, isSelected, onClick }: OrderQueueCardProps) {
     <Card
       className={cn(
         "cursor-pointer transition-all hover:shadow-md border-l-4",
-        isSelected 
-          ? "ring-2 ring-primary shadow-md bg-primary/5" 
-          : "hover:border-primary/50",
+        isSelected ? "ring-2 ring-primary shadow-md bg-primary/5" : "hover:border-primary/50",
+        isOldest && !isSelected ? "ring-2 ring-destructive/40 bg-destructive/5" : "",
         statusConfig[order.status].color.replace('bg-', 'border-l-')
       )}
       onClick={onClick}
@@ -143,16 +144,17 @@ function OrderQueueCard({ order, isSelected, onClick }: OrderQueueCardProps) {
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-mono font-bold text-sm">
-                #{order.id.slice(0, 6).toUpperCase()}
-              </span>
+              <span className="font-mono font-bold text-sm">#{order.id.slice(0, 6).toUpperCase()}</span>
               {getSourceBadge()}
+              {isOldest && (
+                <Badge className="text-[9px] px-1 py-0 bg-destructive text-destructive-foreground">
+                  Mais antigo
+                </Badge>
+              )}
             </div>
-            <p className="text-sm font-medium truncate mt-1">
-              {order.customer_name}
-            </p>
+            <p className="text-sm font-medium truncate mt-1">{order.customer_name}</p>
             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-              <Badge 
+              <Badge
                 variant="secondary"
                 className={cn(
                   "text-[10px] px-1.5 py-0",
@@ -162,11 +164,9 @@ function OrderQueueCard({ order, isSelected, onClick }: OrderQueueCardProps) {
               >
                 {statusConfig[order.status].label}
               </Badge>
-              <span className="text-xs text-muted-foreground">
-                {order.order_items?.length || 0} itens
-              </span>
+              <span className="text-xs text-muted-foreground">{order.order_items?.length || 0} itens</span>
               {isOnlinePayment && (
-                <Badge 
+                <Badge
                   className={cn(
                     "text-[9px] px-1 py-0",
                     isPaid ? 'bg-emerald-500/90 text-white' : 'bg-amber-100 text-amber-700'
@@ -178,9 +178,7 @@ function OrderQueueCard({ order, isSelected, onClick }: OrderQueueCardProps) {
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="font-bold text-sm text-primary">
-              R$ {Number(order.total).toFixed(2)}
-            </p>
+            <p className="font-bold text-sm text-primary">R$ {Number(order.total).toFixed(2)}</p>
             <p className="text-[10px] text-muted-foreground flex items-center gap-0.5 justify-end mt-1">
               <Clock className="h-3 w-3" />
               {formatDistanceToNow(new Date(order.created_at), {
@@ -194,3 +192,4 @@ function OrderQueueCard({ order, isSelected, onClick }: OrderQueueCardProps) {
     </Card>
   );
 }
+
