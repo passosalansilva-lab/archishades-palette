@@ -287,3 +287,6 @@ verify_jwt = false
 
 [functions.force-accept-queued-order]
 verify_jwt = false
+
+[functions.get-store-setup-status]
+verify_jwt = false
