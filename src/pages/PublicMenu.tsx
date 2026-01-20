@@ -42,8 +42,6 @@ import { ProductTagsBadges } from '@/components/menu/ProductTagsEditor';
 import { CheckoutPage } from '@/components/menu/CheckoutPage';
 import { ComboModal } from '@/components/menu/ComboModal';
 // import { TrackOrderModal } from '@/components/menu/TrackOrderModal';
-import { InstallAppPrompt } from '@/components/InstallAppPrompt';
-import { PushNotificationButton } from '@/components/PushNotificationButton';
 import { HalfHalfPizzaModal } from '@/components/menu/HalfHalfPizzaModal';
 import { WaiterCallButton } from '@/components/tables/WaiterCallButton';
 import { TableCustomerModal } from '@/components/tables/TableCustomerModal';
@@ -1629,17 +1627,6 @@ function PublicMenuContent() {
             </div>
           </div>
 
-          {/* Install App - compact and minimal */}
-          <div className="mt-3 flex items-center justify-end gap-3 text-xs text-muted-foreground">
-            <div className="flex-1 min-w-0">
-              <InstallAppPrompt
-                name={company?.name ? `${company.name} 2d Cardápio` : "Cardápio Digital"}
-                short_name={company?.name || "Cardápio"}
-                description={company?.description || `Cardápio digital de ${company?.name || "nossa loja"}`}
-                scope={`/cardapio/${slug}`}
-              />
-            </div>
-          </div>
         </div>
       </div>
 
