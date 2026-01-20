@@ -196,12 +196,19 @@ function PublicMenuContent() {
   // Detect if running inside iframe (embedded mode for preview)
   const isEmbedded = searchParams.get('embedded') === '1';
 
+  type StoreSetupMissingKey = 'name' | 'logo' | 'cover' | 'niche' | 'phone' | 'email' | 'payment';
+  interface StoreSetupStatus {
+    blocked: boolean;
+    missing: StoreSetupMissingKey[];
+  }
+
   const [company, setCompany] = useState<Company | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [storeSetupStatus, setStoreSetupStatus] = useState<StoreSetupStatus | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -706,6 +713,8 @@ function PublicMenuContent() {
   const loadCompanyData = async () => {
     setLoading(true);
     setError(null);
+    setStoreSetupStatus(null);
+
     try {
       // Use companies_public view to avoid leaking sensitive data like owner_id, email, stripe_customer_id
       const { data: companyData, error: companyError } = await supabase
@@ -729,12 +738,25 @@ function PublicMenuContent() {
       }
 
       setCompany(companyData);
-      
+
       // Apply company branding colors to :root for all dialogs/modals to inherit
       applyCompanyBranding({
         primaryColor: companyData.primary_color || undefined,
         secondaryColor: (companyData as any).secondary_color || undefined,
       });
+
+      // Bloquear cardápio até a loja configurar dados essenciais (exceto em preview)
+      if (!isPreview && slug) {
+        const { data, error: setupError } = await supabase.functions.invoke('get-store-setup-status', {
+          body: { slug },
+        });
+
+        if (!setupError && data?.ok && data?.blocked) {
+          setStoreSetupStatus({ blocked: true, missing: (data.missing || []) as any });
+          setLoading(false);
+          return;
+        }
+      }
 
       const { data: categoriesData, error: categoriesError } = await supabase
         .from('categories')
@@ -1362,6 +1384,58 @@ function PublicMenuContent() {
 
   const isPreviewMode = isPreview;
   const isMenuPublished = !!company?.menu_published;
+
+  const missingLabel: Record<string, string> = {
+    name: 'Nome da loja',
+    logo: 'Foto do perfil (logo)',
+    cover: 'Capa',
+    niche: 'Nicho',
+    phone: 'Telefone',
+    email: 'E-mail',
+    payment: 'Forma de pagamento',
+  };
+
+  if (storeSetupStatus?.blocked && !isPreviewMode) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
+            <Store className="h-10 w-10 text-muted-foreground" />
+          </div>
+          <h1 className="text-2xl font-display font-bold mb-2">Falta configurar sua loja</h1>
+          <p className="text-muted-foreground mb-6">
+            Finalize as informações essenciais para liberar o cardápio para seus clientes.
+          </p>
+
+          {storeSetupStatus.missing?.length > 0 && (
+            <div className="text-left rounded-lg border bg-card p-4 mb-6">
+              <p className="text-sm font-medium mb-3">Pendências:</p>
+              <ul className="space-y-2">
+                {storeSetupStatus.missing.map((k) => (
+                  <li key={k} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    <span>{missingLabel[k] || k}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3">
+            <Button asChild size="lg" className="h-12">
+              <Link to="/dashboard/store">Configurar agora</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="h-12">
+              <Link to="/">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar ao início
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if ((error || !company) && !isPreviewMode) {
     return (
