@@ -369,6 +369,23 @@ export default function MyOrders() {
       }
 
       // OK: refaz carrinho (persistindo ANTES do redirect para evitar race com unmount)
+      // Observação: ao repetir pedido, o payload de order_items não traz imagem do produto.
+      // Então buscamos as imagens atuais do cardápio para preencher imageUrl no carrinho.
+      const { data: productsForImages, error: productsForImagesError } = await supabase
+        .from("products")
+        .select("id, image_url")
+        .eq("company_id", companyId)
+        .in("id", productIds);
+
+      if (productsForImagesError) throw productsForImagesError;
+
+      const imageUrlByProductId = new Map<string, string>();
+      for (const p of productsForImages || []) {
+        const pid = (p as any).id as string;
+        const url = (p as any).image_url as string | null;
+        if (pid && url) imageUrlByProductId.set(pid, url);
+      }
+
       const cartItems = order.order_items.map((item, idx) => {
         const safeOptions = (item.options || []).map((o) => ({
           name: o.name,
@@ -384,6 +401,7 @@ export default function MyOrders() {
           quantity: item.quantity,
           options: safeOptions,
           notes: item.notes || undefined,
+          imageUrl: imageUrlByProductId.get(item.product_id),
         };
       });
 
