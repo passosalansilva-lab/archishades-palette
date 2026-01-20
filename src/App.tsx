@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AuthProvider } from "@/hooks/useAuth";
 import { DriverAuthProvider } from "@/hooks/useDriverAuth";
+import { CartProvider } from "@/hooks/useCart";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { ProtectedFeatureRoute } from "@/components/layout/ProtectedFeatureRoute";
 import { PageTitle } from "@/components/PageTitle";
@@ -143,7 +144,14 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/menu/:slug" element={<PublicMenu />} />
               <Route path="/s/:slug" element={<ShareRedirect />} />
-              <Route path="/my-orders" element={<MyOrders />} />
+              <Route
+                path="/my-orders"
+                element={
+                  <CartProvider>
+                    <MyOrders />
+                  </CartProvider>
+                }
+              />
               <Route path="/track/:orderId" element={<OrderTracking />} />
               <Route path="/orders" element={<OrderHistory />} />
               <Route path="/email-signature" element={<EmailSignature />} />

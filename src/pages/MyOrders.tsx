@@ -221,6 +221,192 @@ export default function MyOrders() {
     return status === "pending" || status === "confirmed";
   };
 
+  const normalizeText = (value: string) => value.trim().toLowerCase();
+
+  const repeatOrder = async (order: Order) => {
+    if (!slug || !companyId) {
+      toast({
+        title: "Não foi possível repetir este pedido",
+        description: "Abra seus pedidos a partir do cardápio da loja para repetir com segurança.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!order.order_items?.length) {
+      toast({
+        title: "Pedido sem itens",
+        description: "Não encontramos itens para repetir.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRepeatingOrderId(order.id);
+
+    try {
+      const productIds = Array.from(
+        new Set(order.order_items.map((i) => i.product_id).filter(Boolean)),
+      );
+
+      // 1) Produtos ativos no cardápio
+      const { data: activeProducts, error: activeProductsError } = await supabase
+        .from("products")
+        .select("id, is_active")
+        .eq("company_id", companyId)
+        .in("id", productIds);
+
+      if (activeProductsError) throw activeProductsError;
+
+      const activeSet = new Set((activeProducts || []).filter((p: any) => p.is_active).map((p: any) => p.id));
+      const inactiveOrMissing = productIds.filter((id) => !activeSet.has(id));
+
+      if (inactiveOrMissing.length > 0) {
+        toast({
+          title: "Pedido indisponível para repetir",
+          description: "Algum produto do pedido não está mais disponível no cardápio.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 2) Estoque / ficha técnica
+      const { data: availabilityData, error: availabilityError } = await supabase.functions.invoke(
+        "get-unavailable-products",
+        { body: { companyId } },
+      );
+
+      if (availabilityError) throw availabilityError;
+
+      const unavailableIds: string[] = availabilityData?.ok ? (availabilityData.unavailableProductIds || []) : [];
+      const unavailableInOrder = productIds.filter((id) => unavailableIds.includes(id));
+
+      if (unavailableInOrder.length > 0) {
+        toast({
+          title: "Pedido indisponível para repetir",
+          description: "Algum item do pedido está sem estoque no momento.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 3) Opções/variações ainda existem
+      const itemsWithOptions = order.order_items.filter((i) => (i.options || []).length > 0);
+
+      // Se existir meio-a-meio (ou metadados não mapeáveis), bloqueia por segurança
+      const hasUnsupportedOptions = itemsWithOptions.some((i) =>
+        (i.options || []).some((o) => Array.isArray((o as any).halfHalfFlavorProductIds)),
+      );
+
+      if (hasUnsupportedOptions) {
+        toast({
+          title: "Pedido indisponível para repetir",
+          description: "Este pedido contém itens personalizados (ex.: meio a meio) e precisa ser montado novamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Carrega grupos e opções disponíveis para validar por (groupName + name)
+      const { data: groupsData, error: groupsError } = await supabase
+        .from("product_option_groups")
+        .select("id, product_id, name")
+        .in("product_id", productIds);
+
+      if (groupsError) throw groupsError;
+
+      const groupIds = (groupsData || []).map((g: any) => g.id);
+      const { data: optionsData, error: optionsError } = groupIds.length
+        ? await supabase
+            .from("product_options")
+            .select("group_id, name, is_available")
+            .in("group_id", groupIds)
+            .eq("is_available", true)
+        : { data: [], error: null };
+
+      if (optionsError) throw optionsError;
+
+      const groupsByProduct = new Map<string, { id: string; name: string }[]>();
+      for (const g of groupsData || []) {
+        const pid = (g as any).product_id as string;
+        const arr = groupsByProduct.get(pid) || [];
+        arr.push({ id: (g as any).id, name: (g as any).name || "" });
+        groupsByProduct.set(pid, arr);
+      }
+
+      const optionNamesByGroupId = new Map<string, Set<string>>();
+      for (const o of optionsData || []) {
+        const gid = (o as any).group_id as string;
+        const set = optionNamesByGroupId.get(gid) || new Set<string>();
+        set.add(normalizeText((o as any).name || ""));
+        optionNamesByGroupId.set(gid, set);
+      }
+
+      const invalidOptionFound = itemsWithOptions.some((item) => {
+        const groups = groupsByProduct.get(item.product_id) || [];
+
+        return (item.options || []).some((opt) => {
+          const groupName = opt.groupName ? normalizeText(opt.groupName) : "";
+          const optionName = normalizeText(opt.name || "");
+
+          if (!groupName || !optionName) return true;
+
+          const group = groups.find((g) => normalizeText(g.name) === groupName);
+          if (!group) return true;
+
+          const allowedOptions = optionNamesByGroupId.get(group.id);
+          if (!allowedOptions) return true;
+
+          return !allowedOptions.has(optionName);
+        });
+      });
+
+      if (invalidOptionFound) {
+        toast({
+          title: "Pedido indisponível para repetir",
+          description: "Alguma opção/variação do pedido não existe mais.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // OK: refaz carrinho
+      clearCart();
+      setCompanySlug(slug);
+
+      for (const item of order.order_items) {
+        addItem({
+          productId: item.product_id,
+          productName: item.product_name,
+          price: item.unit_price,
+          quantity: item.quantity,
+          options: (item.options || []).map((o) => ({
+            name: o.name,
+            groupName: o.groupName,
+            priceModifier: o.priceModifier,
+          })),
+          notes: item.notes || undefined,
+        });
+      }
+
+      toast({
+        title: "Pedido repetido!",
+        description: "Adicionamos os itens ao seu carrinho.",
+      });
+
+      navigate(`/menu/${slug}`);
+    } catch (error: any) {
+      console.error("Error repeating order:", error);
+      toast({
+        title: "Erro ao repetir pedido",
+        description: error?.message || "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setRepeatingOrderId(null);
+    }
+  };
+
   const searchOrders = async (overrideValue?: string) => {
     const valueRaw = overrideValue ?? emailOrPhone;
 
@@ -607,6 +793,21 @@ export default function MyOrders() {
                           onClick={() => navigate(`/track/${order.id}`)}
                         >
                           Rastrear pedido
+                        </Button>
+
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="flex-1 rounded-full"
+                          onClick={() => repeatOrder(order)}
+                          disabled={repeatingOrderId === order.id}
+                        >
+                          {repeatingOrderId === order.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                          )}
+                          Repetir pedido
                         </Button>
 
                         {isCancellable && (
