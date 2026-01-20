@@ -1262,6 +1262,19 @@ export default function OrdersManagement() {
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
 
+  // Auto-fecha o painel de visualização quando o pedido deixa de ser "ativo"
+  // (ex: avançou para entregue/cancelado) — evita precisar clicar no "X".
+  useEffect(() => {
+    if (statusFilter !== 'active') return;
+    if (!selectedOrder) return;
+
+    const isStillInActiveQueue = activeQueueOrders.some((o) => o.id === selectedOrder.id);
+    const isFinalStatus = ['delivered', 'cancelled'].includes(selectedOrder.status);
+
+    if (isFinalStatus || !isStillInActiveQueue) {
+      setSelectedOrder(null);
+    }
+  }, [statusFilter, selectedOrder, activeQueueOrders]);
 
   const ordersByStatus = {
     pending: filteredOrders.filter((o) => o.status === 'pending'),
