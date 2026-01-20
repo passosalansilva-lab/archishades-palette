@@ -1356,9 +1356,16 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
       }));
       
       // Build notes with table info if applicable
-      const orderNotes = tableNumber 
+      const baseOrderNotes = tableNumber 
         ? `🍽️ MESA ${tableNumber}${data.notes ? ` | ${data.notes}` : ''}`
         : (data.notes || null);
+
+      // Se o cliente escolher PIX manual (quando a loja exibe a chave), marcamos no pedido
+      // para aparecer uma etiqueta no painel de pedidos.
+      const MANUAL_PIX_TAG = '[PIX_MANUAL]';
+      const orderNotes = manualPixSelected
+        ? `${MANUAL_PIX_TAG}${baseOrderNotes ? ` ${baseOrderNotes}` : ''}`
+        : baseOrderNotes;
 
       // Debug log for table order
       if (tableNumber || tableSessionId) {
@@ -2438,9 +2445,9 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
 
             {/* PIX Payment Info */}
             {paymentMethod === 'pix' && (
-              <div className="mt-4 p-4 rounded-lg border border-green-500/30 bg-green-500/5 space-y-2">
+              <div className="mt-4 p-4 rounded-lg border border-border bg-muted/30 space-y-2">
                 <div className="flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-green-500" />
+                  <Lock className="h-4 w-4 text-primary" />
                   <span className="font-medium text-sm">
                     Pagamento PIX seguro via {activeGateway === 'picpay' ? 'PicPay' : 'Mercado Pago'}
                   </span>
@@ -2453,9 +2460,9 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
 
             {/* Card Online Payment Info */}
             {paymentMethod === 'card_online' && (
-              <div className="mt-4 p-4 rounded-lg border border-blue-500/30 bg-blue-500/5 space-y-2">
+              <div className="mt-4 p-4 rounded-lg border border-border bg-muted/30 space-y-2">
                 <div className="flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-blue-500" />
+                  <Lock className="h-4 w-4 text-primary" />
                   <span className="font-medium text-sm">Pagamento seguro via Mercado Pago</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -2464,35 +2471,44 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
               </div>
             )}
 
-            {/* Manual PIX Key display (when store shows their PIX key without online payment) */}
+            {/* Manual PIX Key display (quando a loja exibe a chave) */}
             {showPixKeyOnMenu && manualPixKey && (paymentMethod === 'cash' || paymentMethod === 'card_on_delivery') && (
-              <div className="mt-4 p-4 rounded-lg border border-green-500/30 bg-green-500/5 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-green-500" />
-                  <span className="font-medium text-sm">Pagar via PIX (transferência manual)</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Você também pode pagar via PIX usando a chave abaixo e enviar o comprovante pelo WhatsApp:
-                </p>
-                <div className="bg-background rounded-md p-3 border">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Tipo: {manualPixKeyType === 'cpf' ? 'CPF' : manualPixKeyType === 'cnpj' ? 'CNPJ' : manualPixKeyType === 'email' ? 'Email' : manualPixKeyType === 'phone' ? 'Telefone' : 'Chave Aleatória'}
-                  </p>
+              <div className="mt-4 space-y-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input"
+                    checked={manualPixSelected}
+                    onChange={(e) => setManualPixSelected(e.target.checked)}
+                  />
+                  <span className="font-medium">Vou pagar via PIX (transferência manual)</span>
+                </label>
+
+                <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-3">
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 text-sm font-mono bg-muted px-2 py-1 rounded break-all">
-                      {manualPixKey}
-                    </code>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(manualPixKey);
-                        toast({ title: 'Chave PIX copiada!' });
-                      }}
-                    >
-                      Copiar
-                    </Button>
+                    <Smartphone className="h-4 w-4 text-primary" />
+                    <span className="font-medium text-sm">Chave PIX para copiar</span>
+                  </div>
+                  <div className="bg-background rounded-md p-3 border">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Tipo: {manualPixKeyType === 'cpf' ? 'CPF' : manualPixKeyType === 'cnpj' ? 'CNPJ' : manualPixKeyType === 'email' ? 'Email' : manualPixKeyType === 'phone' ? 'Telefone' : 'Chave Aleatória'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-sm font-mono bg-muted px-2 py-1 rounded break-all">
+                        {manualPixKey}
+                      </code>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(manualPixKey);
+                          toast({ title: 'Chave PIX copiada!' });
+                        }}
+                      >
+                        Copiar
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
