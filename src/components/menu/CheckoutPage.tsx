@@ -34,6 +34,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCart';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { CustomerAuthModal, CustomerData, ReferralDiscountData } from './CustomerAuthModal';
@@ -2366,7 +2367,12 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
             </h2>
             <RadioGroup
               value={paymentMethod}
-              onValueChange={(value) => setValue('paymentMethod', value as any)}
+              onValueChange={(value) => {
+                // Sempre que o cliente mudar a forma de pagamento principal,
+                // desmarcamos o PIX manual (para não ficar ambíguo).
+                setManualPixSelected(false);
+                setValue('paymentMethod', value as any);
+              }}
               className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2"
             >
               {onlinePaymentEnabled && pixEnabled && (
@@ -2421,10 +2427,11 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
                   </div>
                 </Label>
               )}
+
               <Label
                 htmlFor="cash"
                 className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                  paymentMethod === 'cash'
+                  paymentMethod === 'cash' && !manualPixSelected
                     ? 'border-primary bg-accent'
                     : 'border-border hover:border-primary/50'
                 }`}
@@ -2433,10 +2440,11 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
                 <Banknote className="h-5 w-5 text-primary" />
                 <span>Dinheiro</span>
               </Label>
+
               <Label
                 htmlFor="card_on_delivery"
                 className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                  paymentMethod === 'card_on_delivery'
+                  paymentMethod === 'card_on_delivery' && !manualPixSelected
                     ? 'border-primary bg-accent'
                     : 'border-border hover:border-primary/50'
                 }`}
@@ -2445,6 +2453,38 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
                 <CreditCard className="h-5 w-5 text-primary" />
                 <span>{tableNumber ? 'Cartão' : 'Cartão na entrega'}</span>
               </Label>
+
+              {/* PIX manual (transferência) — visualmente exclusivo, mas registra como "cash" + tag [PIX_MANUAL] */}
+              {showPixKeyOnMenu && manualPixKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualPixSelected(true);
+                    setValue('paymentMethod', 'cash' as any);
+                    setValue('needsChange', false);
+                  }}
+                  className={`flex items-center gap-3 p-4 rounded-lg border text-left transition-colors ${
+                    manualPixSelected
+                      ? 'border-primary bg-accent'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="flex h-4 w-4 items-center justify-center">
+                    <div
+                      className={cn(
+                        'h-4 w-4 rounded-full border border-primary',
+                        manualPixSelected ? 'bg-primary' : 'bg-background',
+                      )}
+                      aria-hidden
+                    />
+                  </div>
+                  <Smartphone className="h-5 w-5 text-green-500" />
+                  <div className="flex flex-col">
+                    <span>PIX manual</span>
+                    <span className="text-xs text-muted-foreground">Transferência para a chave (não confirma automático)</span>
+                  </div>
+                </button>
+              )}
             </RadioGroup>
 
             {/* PIX Payment Info */}
@@ -2476,18 +2516,8 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
             )}
 
             {/* Manual PIX Key display (quando a loja exibe a chave) */}
-            {showPixKeyOnMenu && manualPixKey && (paymentMethod === 'cash' || paymentMethod === 'card_on_delivery') && (
+            {showPixKeyOnMenu && manualPixKey && manualPixSelected && (
               <div className="mt-4 space-y-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-input"
-                    checked={manualPixSelected}
-                    onChange={(e) => setManualPixSelected(e.target.checked)}
-                  />
-                  <span className="font-medium">Vou pagar via PIX (transferência manual)</span>
-                </label>
-
                 <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-3">
                   <div className="flex items-center gap-2">
                     <Smartphone className="h-4 w-4 text-primary" />
@@ -2519,7 +2549,7 @@ export function CheckoutPage({ companyId, companyName, companySlug, companyPhone
             )}
 
             {/* Cash change option */}
-            {paymentMethod === 'cash' && (
+            {paymentMethod === 'cash' && !manualPixSelected && (
               <div className="mt-4 p-4 rounded-lg border border-border bg-muted/50 space-y-3">
                 <div className="flex items-center gap-2">
                   <input
