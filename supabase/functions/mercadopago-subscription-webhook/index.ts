@@ -115,7 +115,7 @@ async function sendPaymentAlert(
   }
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -191,20 +191,75 @@ serve(async (req) => {
         amount: payment.transaction_amount 
       });
 
-      // Parse external reference
-      let referenceData;
-      try {
-        referenceData = JSON.parse(payment.external_reference);
-      } catch (e) {
-        logStep("Invalid external reference", { ref: payment.external_reference });
-        return new Response(JSON.stringify({ received: true, error: "Invalid reference" }), {
+      // Parse external reference (can be empty for recurring charges)
+      let referenceData: any | null = null;
+      const rawExternalRef = payment.external_reference;
+
+      if (rawExternalRef) {
+        try {
+          referenceData = JSON.parse(rawExternalRef);
+        } catch (_e) {
+          logStep("Invalid external reference JSON", { ref: rawExternalRef });
+        }
+      }
+
+      // Fallback for recurring card charges: map by preapproval_id
+      // We store the preapproval ID in companies.stripe_customer_id (legacy field name).
+      if (!referenceData) {
+        const preapprovalId = payment.preapproval_id ? String(payment.preapproval_id) : "";
+
+        if (preapprovalId) {
+          logStep("External reference missing/invalid - trying preapproval fallback", { preapprovalId });
+
+          const { data: companyByPreapproval, error: companyByPreapprovalError } = await supabaseClient
+            .from("companies")
+            .select("id, owner_id, subscription_plan")
+            .eq("stripe_customer_id", preapprovalId)
+            .maybeSingle();
+
+          if (companyByPreapprovalError) {
+            logStep("Error looking up company by preapproval_id", {
+              preapprovalId,
+              error: companyByPreapprovalError.message,
+            });
+          }
+
+          if (companyByPreapproval?.id && companyByPreapproval.subscription_plan) {
+            referenceData = {
+              companyId: companyByPreapproval.id,
+              planKey: companyByPreapproval.subscription_plan,
+              userId: companyByPreapproval.owner_id,
+              type: "preapproval_fallback",
+            };
+
+            logStep("Preapproval fallback matched company", {
+              companyId: referenceData.companyId,
+              planKey: referenceData.planKey,
+            });
+          }
+        }
+      }
+
+      if (!referenceData) {
+        // We can't safely associate this payment to a company; acknowledge to avoid retries.
+        logStep("Unable to associate payment to a company - skipping", {
+          paymentId,
+          hasExternalReference: !!rawExternalRef,
+          preapproval_id: payment.preapproval_id,
+        });
+        return new Response(JSON.stringify({ received: true, skipped: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
         });
       }
 
       // Check if this is a subscription payment (both recurring and PIX one-time)
-      if (referenceData.type !== "subscription" && referenceData.type !== "pix_subscription" && referenceData.type !== "preapproval") {
+      if (
+        referenceData.type !== "subscription" &&
+        referenceData.type !== "pix_subscription" &&
+        referenceData.type !== "preapproval" &&
+        referenceData.type !== "preapproval_fallback"
+      ) {
         logStep("Not a subscription payment, skipping", { type: referenceData.type });
         return new Response(JSON.stringify({ received: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
