@@ -1675,6 +1675,13 @@ function PublicMenuContent() {
                     Entrega a partir de R$ {Number(company.delivery_fee).toFixed(2)}
                   </span>
                 )}
+
+                {Number(company.min_order_value) > 0 && (
+                  <span className="flex items-center gap-1">
+                    <ShoppingBag className="h-3 w-3" />
+                    Pedido mínimo: {formatCurrency(Number(company.min_order_value))}
+                  </span>
+                )}
               </div>
 
               {(company.address || company.city) && (
