@@ -443,44 +443,53 @@ export function OrderDetailsPanel({
                   )}
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => onBroadcastToDrivers(order.id)}
-                    disabled={assigningDriver || order.status !== 'ready'}
-                  >
-                    {assigningDriver ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4 mr-2" />
-                    )}
-                    Enviar para todos os entregadores
-                  </Button>
-                  
-                  <div className="flex flex-wrap gap-2">
-                    {availableDrivers
-                      .filter(d => d.is_available && d.driver_status === 'available')
-                      .slice(0, 4)
-                      .map((driver) => (
-                        <Button
-                          key={driver.id}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onAssignDriver(order.id, driver.id)}
-                          disabled={assigningDriver}
-                        >
-                          <UserPlus className="h-3 w-3 mr-1" />
-                          {driver.driver_name?.split(' ')[0] || 'Entregador'}
-                        </Button>
-                      ))}
-                  </div>
-                  
-                  {availableDrivers.filter(d => d.is_available && d.driver_status === 'available').length === 0 && (
-                    <p className="text-sm text-amber-600">Nenhum entregador disponível</p>
-                  )}
-                </div>
+                <>
+                  {(() => {
+                    const eligibleDrivers = availableDrivers.filter(
+                      (d) => d.is_available && d.driver_status === 'available'
+                    );
+
+                    return (
+                      <div className="space-y-3">
+                        {eligibleDrivers.length > 1 && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => onBroadcastToDrivers(order.id)}
+                            disabled={assigningDriver || order.status !== 'ready'}
+                          >
+                            {assigningDriver ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4 mr-2" />
+                            )}
+                            Enviar para todos os entregadores
+                          </Button>
+                        )}
+
+                        <div className="flex flex-wrap gap-2">
+                          {eligibleDrivers.slice(0, 4).map((driver) => (
+                            <Button
+                              key={driver.id}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onAssignDriver(order.id, driver.id)}
+                              disabled={assigningDriver}
+                            >
+                              <UserPlus className="h-3 w-3 mr-1" />
+                              {driver.driver_name?.split(' ')[0] || 'Entregador'}
+                            </Button>
+                          ))}
+                        </div>
+
+                        {eligibleDrivers.length === 0 && (
+                          <p className="text-sm text-amber-600">Nenhum entregador disponível</p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
               )}
             </div>
           )}
